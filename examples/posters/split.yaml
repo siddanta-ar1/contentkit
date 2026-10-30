@@ -1,0 +1,9 @@
+layout: split
+brand: ../brand.yaml
+format: portrait
+image: ../assets/photos/barista.jpg
+focus: [0.5, 0.3]
+kicker: Now hiring
+title: We're looking for a *morning* person
+body: Full-time barista, 6:30 starts, four days a week. We'll teach you to dial in espresso; you bring the patience.
+cta: Apply by 30 November

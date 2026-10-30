@@ -1,0 +1,13 @@
+layout: event
+brand: ../brand.yaml
+format: portrait
+image: ../assets/photos/guitarist.jpg
+focus: [0.62, 0.45]
+kicker: Ridgeline Sessions — Vol. 7
+title: Late Night at the Roastery
+subtitle: Bipul Chettri & band, acoustic set. Cold brew bar until midnight.
+details:
+  - "Date: Fri 22 Nov"
+  - "Doors: 19:30"
+  - "Venue: Ridgeline, Jhamsikhel"
+  - "Tickets: NPR 1,500"

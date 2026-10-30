@@ -1,0 +1,11 @@
+# contentkit poster examples/posters/editorial.yaml -o out/editorial.jpg
+layout: editorial
+brand: ../brand.yaml
+format: portrait
+image: ../assets/photos/coffee-brew.jpg
+focus: [0.55, 0.4]
+issue: "No. 14 — Autumn"
+kicker: Brew guide
+title: The *slow* pour is worth the four minutes
+dek: Why we stopped rushing the bloom, and the 1:16 ratio that made our Ethiopian lots taste like themselves again.
+footer_right: Read on ridgeline.coffee

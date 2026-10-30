@@ -1,52 +1,26 @@
-# contentkit video examples/reel.yaml -o out/reel.mp4
+# Quick-start reel: three photos, a voiceover, music, captions. One format.
+#   contentkit video examples/reel.yaml -o out/reel.mp4
+brand: brand.yaml
 format: reel
-theme:
-  accent: "#ffd400"
-  font: "Inter:black"
-  handle: "@yourbrand"
-
 voiceover:
-  # Either a recorded file...      file: assets/my_voice.wav
-  # ...or text-to-speech (piper if installed, espeak-ng otherwise):
   text: >-
-    Stop paying for sound effects. This whole video was made with free,
-    open source tools. Whoosh on every cut, music that ducks under my voice,
-    and captions that pop word by word. Follow for the template.
-  speed: 1.0
-  delay: 0.3
-
-music:
-  file: assets/loop.wav     # loops automatically to the video length
-  volume: 0.35
-  duck: true                # dips under the voice
-
-captions:
-  enabled: true
-  source: auto              # whisper if installed, else script timing
-  words: 3
-  position: 0.72
-
-transition_sfx: whoosh      # played on every cut; set to null to disable
-
+    Sound is half the picture. A whoosh on every cut,
+    music that ducks under the voice, and a master that platforms don't turn down.
+music: {file: assets/loop.wav, volume: 0.3}
+captions: {style: pop}
+progress: true
 scenes:                     # scenes without duration share the voiceover length
-  - image: assets/bg1.jpg
-    zoom: in
-    kicker: Creator tip
-    title: Free sound FX pipeline
-    sfx: [{name: boom, at: 0.0, volume: 0.7}]
-  - color: "#101014"
-    kicker: Step 1
-    title: Whoosh on every cut
-  - image: assets/bg2.jpg
-    zoom: out
-    title: Music ducks under voice
-    sfx: [{name: pop, at: 0.4}]
-  - color: "#e0115f"
-    title: Follow for the template
-    sfx: [{name: ding, at: 0.3, volume: 0.6}]
-  # Video clips work too:
-  # - video: assets/clip.mp4
-  #   start: 3
-  #   duration: 4
-  #   keep_audio: true
-  #   volume: 0.5
+  - image: assets/photos/concert-crowd.jpg
+    focus: [0.5, 0.4]
+    move: in
+    kicker: Creator notes
+    title: Sound is *half* the picture
+    sfx: [{name: boom, at: 0.0, volume: 0.5}]
+  - image: assets/photos/guitarist.jpg
+    focus: [0.62, 0.45]
+    move: right
+  - layout: stat
+    stat: "−14 LUFS"
+    label: the loudness *every* platform plays back at
+    source: Master here and nothing gets turned down
+    sfx: [pop]

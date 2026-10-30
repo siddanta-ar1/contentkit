@@ -1,0 +1,10 @@
+layout: quote
+brand: ../brand.yaml
+format: portrait
+kicker: From the bar
+quote: I came in for a flat white and left knowing *why* my coffee at home tastes burnt.
+author: Anisha Gurung
+role: Regular since 2022
+image: ../assets/photos/portrait-brick.jpg
+focus: [0.5, 0.82]
+zoom: 2.2

@@ -1,0 +1,21 @@
+# Brand kit used by every example. Copy it into your project and change the values.
+name: Ridgeline
+handle: "@ridgeline.roasters"
+url: ridgeline.coffee
+colors:
+  ink: "#17130f"      # near-black with warmth; pure #000 looks digital next to photos
+  paper: "#f2ede4"    # uncoated-stock white
+  accent: "#b4441c"   # roasted rust, used sparingly: kickers, one emphasised word
+  muted: "#8b8279"
+type:
+  display: "Instrument Serif"
+  display_em: "Instrument Serif:italic"
+  heavy: "Inter Display:black"
+  condensed: "Anton"
+  text: "Inter"
+  text_strong: "Inter:semibold"
+  mono: "IBM Plex Mono"
+look: film
+grain: 0.03
+captions: {style: clean}
+lower_third: {}

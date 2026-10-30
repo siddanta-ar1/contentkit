@@ -1,10 +1,16 @@
-# contentkit post examples/post.yaml -o out/post.png
-format: square            # square | portrait | reel (story) | landscape | thumbnail
-theme:
-  gradient: ["#ff512f", "#dd2476"]   # or bg: "#101014", or image: assets/bg1.jpg
-  accent: "#ffd400"
-  handle: "@yourbrand"
-  # logo: assets/logo.png
-kicker: Creator tip
-title: Stop paying for stock sound effects
-body: Build your own pack in 5 seconds with free, open-source tools
+# Single post on the layout engine.
+#   contentkit poster examples/post.yaml -o out/post.jpg
+#   contentkit poster examples/post.yaml --format reel -o out/story.jpg   (same post as a story)
+layout: swiss
+brand: brand.yaml
+format: portrait
+kicker: Creator notes
+number: "01"
+title: Sound is *half* the picture
+dek: Whoosh on the cut, music that ducks under the voice, a master at -14 LUFS. Viewers feel it before they notice it.
+image: assets/photos/concert-crowd.jpg
+focus: [0.5, 0.45]
+details:
+  - "Transitions: 0.3 s whoosh"
+  - "Music bed: −18 dB under voice"
+  - "Master: −14 LUFS / −1 dBTP"

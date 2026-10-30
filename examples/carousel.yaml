@@ -1,20 +1,37 @@
-# contentkit post examples/carousel.yaml -o out/carousel
+# Five-slide carousel; each slide picks a layout, all share the brand and format.
+#   contentkit poster examples/carousel.yaml -o out/carousel
+brand: brand.yaml
 format: portrait
-theme:
-  bg: "#0d1b2a"
-  accent: "#00e5ff"
-  handle: "@yourbrand"
 slides:
-  - kicker: Save this
-    title: 3 sound tricks that make reels feel expensive
-  - kicker: "01"
-    title: Whoosh on every cut
-    body: Transitions feel intentional instead of jumpy
-  - kicker: "02"
-    title: Duck the music under your voice
-    body: Viewers stay when they can hear every word
-  - kicker: "03"
-    title: Master to -14 LUFS
-    body: The platforms stop turning you down
-  - title: Follow for part 2
-    theme: {gradient: ["#00c6ff", "#0072ff"]}
+  - layout: editorial
+    image: assets/photos/coffee-brew.jpg
+    focus: [0.55, 0.4]
+    issue: Brew guide
+    kicker: Save this
+    title: Four changes that fixed our *pour-over*
+    dek: Same beans, same kettle. Swipe for the numbers.
+  - layout: stat
+    kicker: 01 — Ratio
+    stat: "1:16"
+    label: coffee to water, *by weight*, not by scoop
+    context: 15 g of coffee, 240 g of water. A scoop varies by 30% depending on the roast.
+    source: Weigh both. A NPR 900 scale is the best upgrade you can buy.
+  - layout: split
+    image: assets/photos/barista.jpg
+    focus: [0.5, 0.3]
+    kicker: 02 — Grind
+    title: Medium-fine, like *table salt*
+    body: Too fine and it chokes at 5 minutes and tastes bitter. Too coarse and it's sour and thin.
+  - layout: quote
+    kicker: 03 — Bloom
+    quote: Pour twice the coffee's weight in water, then *wait* thirty seconds. The gas has to leave before the flavour can.
+    author: Suman Rai
+    role: Head roaster, Ridgeline
+  - layout: offer
+    image: assets/photos/coffee-cup.jpg
+    focus: [0.35, 0.55]
+    kicker: 04 — Fresh beans
+    title: Roasted *Monday*, at your door Tuesday
+    price: "NPR 1,950"
+    body: 250 g every fortnight. Pause any time.
+    terms: Kathmandu valley delivery.

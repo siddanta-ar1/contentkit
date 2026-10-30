@@ -1,0 +1,15 @@
+layout: swiss
+brand: ../brand.yaml
+format: portrait
+kicker: Ridgeline — Open studio
+number: "03 / 12"
+title: Roastery doors open *Saturday*
+image: ../assets/photos/brutalist.jpg
+focus: [0.4, 0.5]
+look: noir
+dek: Watch a batch go from green to first crack, taste it twenty minutes later, ask the roaster anything.
+details:
+  - "Date: Sat 16 Nov"
+  - "Time: 10:00 – 14:00"
+  - "Where: Unit 4, Jhamsikhel"
+  - "Entry: Free, no booking"

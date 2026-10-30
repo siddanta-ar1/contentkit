@@ -1,0 +1,59 @@
+# Brand film delivered to three platforms from one edit.
+#   contentkit video examples/video/subscription-launch.yaml -o out/launch
+name: ridgeline-subscription
+brand: ../brand.yaml
+deliver: [reel, square, landscape]   # one render per format + SRT + thumbnail + cover + manifest.json
+platform: universal                  # safe zone for captions/titles: universal | reels | tiktok | shorts
+look: film                           # colour grade (default: brand look); any .cube LUT works too
+transition: {type: fade, duration: 0.45}   # fade = true crossfade; also slideleft, wipeleft, fadeblack, zoomin ...
+transition_sfx: whoosh
+transition_volume: 0.25
+progress: false
+thumbnail:
+  layout: editorial
+  image: ../assets/photos/coffee-brew.jpg
+  focus: [0.55, 0.4]
+  kicker: New
+  title: Roasted Monday, at your door *Tuesday*
+
+voiceover:
+  text: >-
+    Every Monday, we roast in small batches.
+    By Tuesday, it's at your door, still resting, still alive.
+    Twelve hundred kilos a year, bought straight from three farms in Gulmi.
+    Your first box is nineteen fifty. Pause whenever you like.
+
+music:
+  file: ../assets/loop.wav
+  volume: 0.22
+  duck: true
+
+captions:
+  style: clean          # pop | clean | boxed | serif
+
+scenes:
+  - image: ../assets/photos/barista.jpg
+    focus: [0.45, 0.35]
+    move: in
+    kicker: Ridgeline Roasters
+    title: Roasted on *Monday*
+  - image: ../assets/photos/coffee-brew.jpg
+    focus: [0.6, 0.45]
+    move: left
+    lower_third: {name: Suman Rai, role: Head roaster}
+  - layout: stat
+    kicker: Direct trade
+    stat: "1,240 kg"
+    label: bought *directly* from three farms in Gulmi
+    source: "Ridgeline purchase ledger, 2026"
+    transition: cut
+    sfx: [{name: boom, at: 0.0, volume: 0.35}]
+  - image: ../assets/photos/coffee-cup.jpg
+    focus: [0.35, 0.55]
+    move: out
+  - color: "#f2ede4"
+    kicker: ridgeline.coffee/subscribe
+    title: First box *NPR 1,950*
+    body: Pause or cancel any time.
+    transition: {type: fadeblack, duration: 0.5}
+    sfx: [{name: ding, at: 0.35, volume: 0.35}]

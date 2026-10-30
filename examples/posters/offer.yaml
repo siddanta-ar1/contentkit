@@ -1,0 +1,12 @@
+layout: offer
+brand: ../brand.yaml
+format: portrait
+image: ../assets/photos/coffee-cup.jpg
+focus: [0.35, 0.55]
+kicker: Subscription
+title: Fresh beans at your door, *every* fortnight
+was: "NPR 2,400"
+price: "NPR 1,950"
+body: 250 g, roasted on Monday, shipped Tuesday. Pause or cancel any time.
+terms: First box only. Kathmandu valley delivery.
+cta: ridgeline.coffee/subscribe
