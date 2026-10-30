@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contentkit"
+version = "0.1.0"
+description = "Free, open-source pipeline for social content: posts, reels, sound effects, voiceover, captions"
+requires-python = ">=3.10"
+dependencies = ["Pillow>=9", "PyYAML>=6"]
+
+[project.optional-dependencies]
+captions = ["faster-whisper>=1.0"]
+tts = ["piper-tts>=1.2"]
+all = ["faster-whisper>=1.0", "piper-tts>=1.2"]
+
+[project.scripts]
+contentkit = "contentkit.cli:main"
+
+[tool.setuptools]
+packages = ["contentkit"]

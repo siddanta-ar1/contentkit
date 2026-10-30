@@ -1,0 +1,10 @@
+# contentkit post examples/post.yaml -o out/post.png
+format: square            # square | portrait | reel (story) | landscape | thumbnail
+theme:
+  gradient: ["#ff512f", "#dd2476"]   # or bg: "#101014", or image: assets/bg1.jpg
+  accent: "#ffd400"
+  handle: "@yourbrand"
+  # logo: assets/logo.png
+kicker: Creator tip
+title: Stop paying for stock sound effects
+body: Build your own pack in 5 seconds with free, open-source tools

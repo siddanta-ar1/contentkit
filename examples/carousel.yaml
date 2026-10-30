@@ -1,0 +1,20 @@
+# contentkit post examples/carousel.yaml -o out/carousel
+format: portrait
+theme:
+  bg: "#0d1b2a"
+  accent: "#00e5ff"
+  handle: "@yourbrand"
+slides:
+  - kicker: Save this
+    title: 3 sound tricks that make reels feel expensive
+  - kicker: "01"
+    title: Whoosh on every cut
+    body: Transitions feel intentional instead of jumpy
+  - kicker: "02"
+    title: Duck the music under your voice
+    body: Viewers stay when they can hear every word
+  - kicker: "03"
+    title: Master to -14 LUFS
+    body: The platforms stop turning you down
+  - title: Follow for part 2
+    theme: {gradient: ["#00c6ff", "#0072ff"]}

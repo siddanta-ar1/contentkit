@@ -1,0 +1,52 @@
+# contentkit video examples/reel.yaml -o out/reel.mp4
+format: reel
+theme:
+  accent: "#ffd400"
+  font: "Inter:black"
+  handle: "@yourbrand"
+
+voiceover:
+  # Either a recorded file...      file: assets/my_voice.wav
+  # ...or text-to-speech (piper if installed, espeak-ng otherwise):
+  text: >-
+    Stop paying for sound effects. This whole video was made with free,
+    open source tools. Whoosh on every cut, music that ducks under my voice,
+    and captions that pop word by word. Follow for the template.
+  speed: 1.0
+  delay: 0.3
+
+music:
+  file: assets/loop.wav     # loops automatically to the video length
+  volume: 0.35
+  duck: true                # dips under the voice
+
+captions:
+  enabled: true
+  source: auto              # whisper if installed, else script timing
+  words: 3
+  position: 0.72
+
+transition_sfx: whoosh      # played on every cut; set to null to disable
+
+scenes:                     # scenes without duration share the voiceover length
+  - image: assets/bg1.jpg
+    zoom: in
+    kicker: Creator tip
+    title: Free sound FX pipeline
+    sfx: [{name: boom, at: 0.0, volume: 0.7}]
+  - color: "#101014"
+    kicker: Step 1
+    title: Whoosh on every cut
+  - image: assets/bg2.jpg
+    zoom: out
+    title: Music ducks under voice
+    sfx: [{name: pop, at: 0.4}]
+  - color: "#e0115f"
+    title: Follow for the template
+    sfx: [{name: ding, at: 0.3, volume: 0.6}]
+  # Video clips work too:
+  # - video: assets/clip.mp4
+  #   start: 3
+  #   duration: 4
+  #   keep_audio: true
+  #   volume: 0.5
