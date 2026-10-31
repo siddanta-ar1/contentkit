@@ -1,7 +1,7 @@
 """contentkit command line. `contentkit <command> -h` for options.
 
 Design      poster, post, print, looks, layouts, brand, safezone
-Video       video, template, cut, captions, proof
+Video       video, template, cut, captions, proof, analyze
 Audio       beats, clean, master, tts, sfx
 Assets      fetch, formats
 Setup       skill, private
@@ -241,8 +241,17 @@ def cmd_fetch(a):
     start = end = None
     if a.section:
         start, end = a.section.split("-")
-    path, meta = download(a.url, a.audio, a.out, a.license or "", start, end, search=a.search)
+    path, meta = download(a.url, a.audio, a.out, a.license or "", start, end, search=a.search,
+                          browser=a.browser, cookies=a.cookies)
     print(f"{path}\n{json.dumps(meta, indent=2, ensure_ascii=False)}")
+
+
+def cmd_analyze(a):
+    from .analyze import analyze, render_text, save
+    r = analyze(a.video, a.kind)
+    print(render_text(r))
+    if a.json:
+        save(r, a.json)
 
 
 def cmd_beats(a):
@@ -406,9 +415,16 @@ def main(argv=None):
     s.add_argument("--search", metavar="QUERY", help="take the top YouTube result for QUERY")
     s.add_argument("--list", nargs="?", const="", metavar="FILTER", help="list downloads (optionally filtered)")
     s.add_argument("--audio", action="store_true", help="audio only, mp3")
+    s.add_argument("--browser", help="use this browser's login (chrome, brave, firefox, edge) for IG/FB")
+    s.add_argument("--cookies", help="cookies.txt exported from a logged-in browser")
     s.add_argument("--section", help="seconds, e.g. 12-20")
     s.add_argument("--license")
     s.add_argument("--out")
+
+    s = cmd("analyze", cmd_analyze, "critique an edit: hook, pacing, dead air, loudness, defects, score")
+    s.add_argument("video")
+    s.add_argument("--kind", default="meme", choices=["meme", "remix", "commentary", "brand"])
+    s.add_argument("--json", metavar="FILE", help="also write the report as JSON")
 
     s = cmd("beats", cmd_beats, "tempo, first beat and hook (most energetic part) of a song")
     s.add_argument("song")

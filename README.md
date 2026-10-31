@@ -23,6 +23,8 @@ upload of client material.
 - [Print](#print)
 - [Video](#video)
 - [Music-driven edits](#music-driven-edits)
+- [Meme, reaction and commentary edits](#meme-reaction-and-commentary-edits)
+- [Critique an edit](#critique-an-edit)
 - [Use it from any project (agent skill)](#use-it-from-any-project-agent-skill)
 - [Audio](#audio)
 - [Colour looks](#colour-looks)
@@ -333,6 +335,78 @@ Templates (`contentkit template list`):
 Downloads are labelled `private use (local only)` instead of `UNKNOWN`. Every download is
 indexed in `~/.contentkit/downloads/index.json` with title, uploader, URL and duration.
 
+## Meme, reaction and commentary edits
+
+Any `video:` scene can take these (photos take the overlays too):
+
+```yaml
+- video: media/clip.mp4
+  start: 3.2
+  duration: 3
+  keep_audio: true
+  header: "POV: your friend actually remembered your birthday"   # white caption bar on top
+  zoom_to: {at: 1.1, focus: [0.68, 0.33], scale: 2.4, hold: 1.0} # snap zoom (+ vine-boom)
+  freeze: {at: 1.0, hold: 1.4}                                   # freeze frame (+ record-scratch)
+  speed: 0.5                                                     # slow-mo; 2 = double; reverse: true
+  meme: {top: "when the kitkat hits", bottom: "different"}       # classic meme text
+  texts: [{at: 1.0, until: 2.4, text: "wait for it", style: meme, position: bottom}]
+  callouts: [{at: 1.0, until: 2.4, shape: circle, rect: [0.38, 0.47, 0.2, 0.09], label: "the gift"}]
+  split: {video: media/other.mp4, start: 8.6, labels: ["before", "after"]}   # stacked / side by side
+  pip: {video: media/my-face.mp4, start: 0, corner: tr, size: 0.32}          # reaction cam
+  source: "via @handle"                                          # credit for clipped footage
+```
+
+`focus` and `rect` are fractions of the frame (0–1): read them off a proof sheet. Text
+styles: `meme` (white Anton with black outline), `label` (annotation plate), `plain`.
+Callout shapes: `circle`, `box`, `arrow`. Zoom and freeze bring their sound automatically;
+`sfx: null` on the edit silences it. Edit times are seconds into the scene.
+
+Comedy sounds in the SFX pack: `vine-boom record-scratch airhorn dramatic boing slide-up
+slide-down sad-trombone cha-ching`.
+
+Templates: `meme-edit` (POV setup → zoom on the reaction → freeze on the punchline →
+slow-mo fail) and `commentary` (your voice, callouts, zoom on the proof, split compare,
+reaction cam, verdict card).
+
+**Clips from social sites.** `fetch` uses yt-dlp, so Instagram, Facebook, TikTok, X,
+Reddit, YouTube and ~1,800 other sites work:
+
+```bash
+contentkit fetch "https://www.instagram.com/reel/…" --out content/job/media
+contentkit fetch "https://www.facebook.com/…/videos/…" --browser chrome --out content/job/media
+contentkit fetch "<url>" --section 12-20 --out content/job/media       # only the part you need
+```
+
+Instagram and Facebook usually serve videos only to logged-in users. `--browser chrome`
+(or `brave`, `firefox`, `edge`) lets yt-dlp use the login already in that browser on your
+machine; `--cookies cookies.txt` uses an exported cookie file instead. On Linux, Chrome
+and Brave encrypt their cookies with the system keyring: install `pip install
+secretstorage` (included in `.[fetch]` / `.[all]`) for `--browser` to read them. For
+YouTube, `fetch` passes your Node.js to yt-dlp as the JavaScript runtime it now needs.
+
+## Critique an edit
+
+```bash
+contentkit analyze out/meme.mp4 --kind meme      # meme | remix | commentary | brand
+```
+
+```
+meme.mp4  ·  meme  ·  score 61/100
+  length       13.6s   1080x1920
+  shots        8   first cut 1.13s   avg 1.7s   longest 3.0s
+  loudness     -11.5 LUFS   true peak -1.0 dBTP
+  FIX     [loudness] -11.5 LUFS; deliver at -14 (contentkit master FILE).
+  IMPROVE [dead air] Silence 4.2-5.4s. Fill it (sfx, music) or cut it, unless it's the joke.
+```
+
+It measures hook speed (time to the first cut), pacing (average and longest shot), dead
+air, loudness and true peak, black frames, frozen stretches, aspect and resolution, then
+scores against working rules for that kind of video. Cuts are detected on blurred 48-px
+thumbnails, so on-beat zoom pulses and grain don't count as cuts; a jump between two
+near-identical framings of the same action doesn't either. `--json report.json` saves the
+numbers. The agent skill runs it after every render and fixes what it flags (target 80+).
+The example above is the meme test before a music bed was added; after, it scores 100.
+
 ## Use it from any project (agent skill)
 
 ```bash
@@ -362,10 +436,14 @@ contentkit sfx init | list | play whoosh | add laugh.wav --source URL --license 
 - **Jump cuts**: silence detection with padding so words aren't clipped, 12 ms fades at every
   edit (no clicks), optional punch-in on alternate segments to hide the jump. Writes
   `NAME.cuts.json` with every kept range.
-- **Mastering**: EBU R128 two-pass loudnorm (measure, then linear normalisation). The
-  examples land within ±0.1 LU of −14 LUFS and under −1 dBTP.
-- **Sound effects**: 15 synthesized effects (whoosh, swoosh-up, pop, click, tick, ding,
-  notify, sparkle, boom, bass-drop, riser, glitch, buzzer, shutter, heartbeat), generated
+- **Mastering**: measure (EBU R128), apply the exact gain, limit to the true-peak ceiling,
+  re-measure and correct if the limiter moved the level. Lands within ±0.1 LU of −14 LUFS
+  and under −1 dBTP, including edits with silences next to loud hits, where ffmpeg's
+  two-pass loudnorm quietly falls back to its dynamic mode and misses.
+- **Sound effects**: 24 synthesized effects (whoosh, swoosh-up, pop, click, tick, ding,
+  notify, sparkle, boom, bass-drop, riser, glitch, buzzer, shutter, heartbeat, plus the
+  comedy set: vine-boom, record-scratch, airhorn, dramatic, boing, slide-up, slide-down,
+  sad-trombone, cha-ching), generated
   locally, so they carry no third-party license. Your own sounds are tracked with their
   source and license in `~/.contentkit/sfx/library.json`.
 
@@ -429,9 +507,10 @@ contentkit proof out/carousel --cols 5 --title "Brew guide"               # boar
 | `brand` | `init` a brand kit from a preset; `presets` |
 | `sfx` | Sound library: `init list play add` |
 | `tts` | Text to speech |
-| `fetch` | Download by URL or `--search "song"`; `--list` the library; `.source.json` record |
+| `fetch` | Download by URL (YouTube, Instagram, Facebook, TikTok, X …) or `--search "song"`; `--browser` login; `--list` the library |
+| `analyze` | Critique an edit: hook, pacing, dead air, loudness, defects, score |
 | `beats` | Song tempo, first beat and hook |
-| `template` | `list`, `new NAME DIR`: start a job (birthday-remix, hotel-remix) |
+| `template` | `list`, `new NAME DIR`: start a job (birthday-remix, hotel-remix, meme-edit, commentary) |
 | `skill` | `install [global|PROJECT]`, `show`: the Claude Code skill |
 | `private` | `on|off|status`: private local-only mode |
 | `formats` | Output sizes |
@@ -490,8 +569,10 @@ contentkit/
   video.py      scenes, moves, overlays, transitions, mix, captions, mastering, deliverables
   audio.py      voice chain, two-pass loudness, silence-cut jump edits
   beats.py      tempo, beat phase and hook detection
+  edits.py      meme / commentary edits: zoom_to, freeze, speed, header, meme text, callouts, split, pip
+  analyze.py    edit critique: hook, pacing, dead air, loudness, defects
   config.py     ~/.contentkit/config.yaml (private mode)
-  templates/    job templates (birthday-remix, hotel-remix)
+  templates/    job templates (birthday-remix, hotel-remix, meme-edit, commentary)
   skill/        the Claude Code skill installed by `contentkit skill install`
   captions.py   whisper timing, script alignment, ASS caption styles, SRT export
   proof.py      video contact sheets, image boards
@@ -565,6 +646,15 @@ conservative value is used, and every value can be overridden.
 | Captions missing | ffmpeg needs libass (distro builds have it); captions need a voiceover |
 
 ## Changelog
+
+**0.4.0**: comedy, commentary and critique.
+Meme and commentary edits on any scene (POV header, meme text, timed text, red
+circle/box/arrow callouts, snap zoom, freeze frame, slow-mo/speed/reverse, split
+screen, reaction cam, source credit); nine comedy sounds; `meme-edit` and `commentary`
+templates; `contentkit analyze` edit critic with pulse-proof cut detection; social
+downloads with `--browser`/`--cookies` logins and Node as YouTube's JS runtime; mastering
+rewritten as gain + true-peak limiter with correction (fixes misses on dynamic edits);
+fetch errors show the real yt-dlp error.
 
 **0.3.0**: music-driven edits and agent skill.
 Beat analysis (tempo, kick-weighted phase, hook); beat-synced cuts with `beats:` per scene;

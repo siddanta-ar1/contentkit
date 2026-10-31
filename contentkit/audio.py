@@ -41,15 +41,26 @@ def measure(src, target=LOUDNESS):
 
 
 def master(src, out, target=LOUDNESS):
-    """Two-pass loudnorm: measure, then normalise linearly, so dynamics are preserved and the
-    result lands on target instead of the single-pass approximation."""
+    """Measure (EBU R128), apply the exact gain to hit the target, limit to the true-peak
+    ceiling, re-measure and correct once if the limiter moved the level.
+
+    ffmpeg's two-pass loudnorm silently drops to its dynamic mode whenever the programme's
+    loudness range exceeds the LRA target (common in edits with silences next to loud hits),
+    and dynamic mode doesn't settle on short clips. Plain gain + limiter always lands.
+    """
     m = measure(src, target)
-    ff.run(["-i", src, "-af",
-            f"loudnorm=I={target['I']}:TP={target['TP']}:LRA={target['LRA']}:measured_I={m['input_i']}"
-            f":measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}"
-            f":offset={m['target_offset']}:linear=true,aresample={ENCODE['audio_rate']}",
-            "-ar", ENCODE["audio_rate"], out])
-    final = measure(out, target)
+    ceiling = 10 ** ((target["TP"] - 0.3) / 20)  # margin: alimiter works on samples, not true peak
+    gain = target["I"] - float(m["input_i"])
+    tmp = Path(out).with_suffix(".pass1.wav")
+    for _ in range(4):
+        ff.run(["-i", src, "-af", f"volume={gain:.2f}dB,alimiter=limit={ceiling:.4f}:attack=2:release=60:level=disabled,"
+                f"aresample={ENCODE['audio_rate']}", "-ar", ENCODE["audio_rate"], "-c:a", "pcm_s24le", tmp])
+        final = measure(tmp, target)
+        miss = target["I"] - float(final["input_i"])
+        if abs(miss) <= 0.3:
+            break
+        gain += miss  # the limiter ate some level: push the gain by the difference
+    tmp.replace(out)
     return {"integrated_lufs": float(final["input_i"]), "true_peak_dbtp": float(final["input_tp"]),
             "lra": float(final["input_lra"])}
 

@@ -1,0 +1,40 @@
+# Meme edit: POV hook, snap zoom on the reaction, freeze frame on the punchline.
+#   contentkit fetch "<instagram/tiktok/fb url>" --browser chrome --out media   (download the clip)
+#   contentkit video meme-edit.yaml -o out/meme.mp4 && contentkit analyze out/meme.mp4 --kind meme
+# Timing rule: the joke needs a setup (1-2 s), a beat of silence or a freeze, then the payoff.
+name: meme-<topic>
+brand: {preset: fresh}
+format: reel
+platform: tiktok
+captions: false
+transition: cut
+
+music:                               # optional bed: a trending sound or a remix hook, kept low
+  file: <path/to/sound.mp3>
+  start: hook
+  volume: 0.35
+
+scenes:
+  - video: media/clip.mp4            # SETUP: the situation, with the POV line on top
+    start: <seconds>
+    duration: 2.4
+    keep_audio: true
+    header: "POV: <the situation in one line>"
+  - video: media/clip.mp4            # REACTION: snap-zoom onto the face (vine boom is automatic)
+    start: <seconds>
+    duration: 2.2
+    keep_audio: true
+    zoom_to: {at: 0.6, focus: [0.5, 0.35], scale: 2.2, hold: 1.0}
+  - video: media/clip.mp4            # PUNCHLINE: freeze (record scratch is automatic) + text + red circle
+    start: <seconds>
+    duration: 3.0
+    keep_audio: true
+    freeze: {at: 1.0, hold: 1.4}
+    texts: [{at: 1.0, until: 2.4, text: "<the punchline>", style: meme, position: bottom}]
+    callouts: [{at: 1.0, until: 2.4, shape: circle, rect: [0.4, 0.4, 0.2, 0.15], label: "<what to look at>"}]
+  - video: media/clip.mp4            # AFTERMATH: slow-mo with the sad trombone
+    start: <seconds>
+    duration: 2.4
+    speed: 0.5
+    meme: {top: "<top text>", bottom: "<bottom text>"}
+    sfx: [{name: sad-trombone, at: 0.1, volume: 0.6}]

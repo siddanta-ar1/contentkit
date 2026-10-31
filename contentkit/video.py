@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import audio, ff, typo
+from . import audio, edits, ff, typo
 from . import imagefx as fx
 from .brand import load_brand
 from .captions import STYLES, align_script, transcribe, write_ass, write_srt
@@ -181,13 +181,34 @@ def _render_scene(i, scene, fmt, brand, work, lut, platform, look, caption_band=
     focus = tuple(scene.get("focus", (0.5, 0.5)))
     inputs, keep_audio = [], False
 
+    pre_graph, n_in = [], 1
     if kind == "video":
         src = scene["video"]
-        inputs += ["-ss", scene.get("start", 0), "-t", dur, "-i", src]
-        vf = (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,"
-              f"crop={w}:{h}:(iw-{w})*{focus[0]}:(ih-{h})*{focus[1]},setsar=1,fps={fps}")
+        hdr = round(h * (0.24 if h > w else 0.18)) if scene.get("header") else 0
+        vh = h - hdr
+        inputs += ["-ss", scene.get("start", 0), "-t", f"{edits.source_seconds(scene, dur):.3f}", "-i", src]
+        timing = ",".join(edits.timing_video(scene, fps))
+        if scene.get("split"):
+            pre_graph.append(f"[0:v]{timing}[raw]")
+            s_in, s_graph, base, n_in = edits.split_graph(scene, w, vh, fps, dur, "[raw]", n_in, brand, work, i,
+                                                          focus)
+            inputs += s_in
+            pre_graph += s_graph
+            vf = f"{base}null"
+        else:
+            vf = (f"[0:v]{timing},scale={w}:{vh}:force_original_aspect_ratio=increase:flags=lanczos,"
+                  f"crop={w}:{vh}:(iw-{w})*{focus[0]}:(ih-{vh})*{focus[1]},setsar=1")
+        zoom = edits.zoom_filter(scene, w, vh, fps)
+        if zoom:
+            vf += "," + zoom
         if lut and scene.get("grade", True):
             vf += f",lut3d=file='{lut}':interp=tetrahedral"
+        if hdr:
+            png = edits.header_png(scene["header"], w, hdr, brand, work / f"header_{i:03d}.png")
+            vf += f",pad={w}:{h}:0:{hdr}:color=white[hb];"
+            inputs += ["-loop", 1, "-framerate", fps, "-t", dur, "-i", png]
+            vf += f"[hb][{n_in}:v]overlay=0:0"
+            n_in += 1
         keep_audio = scene.get("keep_audio", False) and ff.has_audio(src)
     else:
         still = work / f"still_{i:03d}.png"
@@ -220,8 +241,11 @@ def _render_scene(i, scene, fmt, brand, work, lut, platform, look, caption_band=
 
     if scene.get("fade"):
         vf += f",fade=t=in:st=0:d=0.3,fade=t=out:st={dur - 0.3}:d=0.3"
-    graph, last, n_in = [vf + "[base]"], "[base]", 1
+    graph, last = pre_graph + [vf + "[base]"], "[base]"
     rise = round(min(w, h) * 0.025)
+    p_in, p_graph, last, n_in = edits.pip_graph(scene, w, h, fps, dur, platform, last, n_in)
+    inputs += p_in
+    graph += p_graph
     if scene.get("title") and kind in ("image", "video"):
         png = _title_overlay(scene, w, h, brand, platform, work / f"title_{i:03d}.png")
         inputs += ["-loop", 1, "-framerate", fps, "-t", dur, "-i", png]
@@ -238,13 +262,15 @@ def _render_scene(i, scene, fmt, brand, work, lut, platform, look, caption_band=
                      f"fade=t=out:st={start + hold - 0.4}:d=0.35:alpha=1[l{n_in}];"
                      f"{last}[l{n_in}]overlay=x='{lx}-{rise * 2}*(1-{_ease(p)})':y={ly}[o{n_in}]")
         last, n_in = f"[o{n_in}]", n_in + 1
+    o_in, o_graph, last, n_in = edits.overlay_graph(scene, w, h, fps, dur, brand, platform, work, i, last, n_in)
+    inputs += o_in
+    graph += o_graph
     # RGB stills -> BT.709 limited range explicitly; swscale's default is BT.601, which
     # shifts colours once platforms re-encode.
     graph.append(f"{last}scale={w}:{h}:out_color_matrix=bt709:out_range=tv,format=yuv420p,setsar=1[v]")
 
     if keep_audio:
-        graph.append(f"[0:a]aformat=sample_rates={ENCODE['audio_rate']}:channel_layouts=stereo,"
-                     f"volume={scene.get('volume', 1.0)},apad=whole_dur={dur}[a]")
+        graph += edits.timing_audio(scene, "[0:a]", dur, ENCODE["audio_rate"])
     else:
         inputs += ["-f", "lavfi", "-t", dur, "-i", f"anullsrc=r={ENCODE['audio_rate']}:cl=stereo"]
         graph.append(f"[{n_in}:a]anull[a]")
@@ -459,6 +485,8 @@ def _cues(recipe, scenes, trans, starts, grid=None):
         for cue in scene.get("sfx", []):
             cue = {"name": cue} if isinstance(cue, str) else cue
             cues.append((cue["name"], starts[i] + float(cue.get("at", 0)), cue.get("volume", 0.8)))
+        for name, at, vol in edits.auto_cues(scene):
+            cues.append((name, starts[i] + at, vol))
     return cues
 
 

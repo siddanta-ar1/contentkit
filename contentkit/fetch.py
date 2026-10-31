@@ -36,8 +36,13 @@ def library(query=None):
     return items
 
 
-def download(url=None, audio_only=False, out_dir=None, license="", start=None, end=None, search=None):
-    """url, or search="song name artist" (takes YouTube's top result)."""
+def download(url=None, audio_only=False, out_dir=None, license="", start=None, end=None, search=None,
+             browser=None, cookies=None):
+    """url, or search="song name artist" (takes YouTube's top result).
+
+    Instagram, Facebook and some TikTok/X posts only download for a logged-in user:
+    browser="chrome" (or brave, firefox, edge, chromium) reuses that browser's login on this
+    machine; cookies="cookies.txt" uses an exported cookie file instead."""
     # prefer the yt-dlp installed with this Python: distro packages lag behind YouTube changes
     local = Path(sys.executable).with_name("yt-dlp")
     ytdlp = str(local) if local.exists() else shutil.which("yt-dlp")
@@ -54,11 +59,24 @@ def download(url=None, audio_only=False, out_dir=None, license="", start=None, e
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]   # V0 mp3: ~8x smaller than wav
     else:
         cmd += ["-f", "bv*[height<=1920]+ba/b", "--merge-output-format", "mp4"]
+    # YouTube now needs a JavaScript runtime for its player challenge; yt-dlp only looks for
+    # deno by default, so hand it node when that's what's installed.
+    if not shutil.which("deno") and shutil.which("node"):
+        cmd += ["--js-runtimes", f"node:{shutil.which('node')}"]
+    if browser:
+        cmd += ["--cookies-from-browser", browser]
+    elif cookies:
+        cmd += ["--cookies", str(cookies)]
     if start is not None or end is not None:
         cmd += ["--download-sections", f"*{start or 0}-{end or 'inf'}", "--force-keyframes-at-cuts"]
     proc = subprocess.run([*cmd, target], capture_output=True, text=True)
     if proc.returncode != 0 or not proc.stdout.strip():
-        raise SystemExit(proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else "yt-dlp found nothing")
+        lines = proc.stderr.strip().splitlines()
+        errors = [l for l in lines if l.startswith("ERROR")]
+        msg = (errors or lines or ["yt-dlp found nothing"])[-1]
+        if not browser and any(k in msg.lower() for k in ("login", "cookies", "private", "rate-limit", "sign in")):
+            msg += "\n  -> this site wants a login: retry with --browser chrome (or brave/firefox)"
+        raise SystemExit(msg)
     path = Path(proc.stdout.strip().splitlines()[-1])
 
     info_file = path.with_suffix(".info.json")

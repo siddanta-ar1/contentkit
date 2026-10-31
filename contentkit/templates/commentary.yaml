@@ -1,0 +1,39 @@
+# Commentary / reaction / breakdown: your voice over the clip, red circles on what matters,
+# a side-by-side for comparisons, your face in the corner, the source credited.
+#   contentkit cut media/my-take.mp4 --punch 1.1 -o media/my-take-cut.mp4   (record your take, drop pauses)
+#   contentkit video commentary.yaml -o out/breakdown --only reel && contentkit analyze out/breakdown/*.mp4 --kind commentary
+name: breakdown-<topic>
+brand: {preset: editorial, look: natural}
+deliver: [reel, landscape]
+platform: reels
+
+voiceover:
+  file: media/my-take-cut.mp4       # your commentary (audio is cleaned automatically)
+music: {file: <path/to/bed.mp3>, start: hook, volume: 0.18, duck: true}
+captions: {style: clean}
+transition: cut
+
+scenes:
+  - video: media/clip.mp4           # HOOK: the most striking moment first, with the claim
+    start: <seconds>
+    header: "<the claim / question in one line>"
+    source: "via <@handle>"
+  - video: media/clip.mp4           # EVIDENCE: circle the detail while you talk about it
+    start: <seconds>
+    callouts:
+      - {at: 0.4, until: 2.5, shape: circle, rect: [0.4, 0.35, 0.2, 0.15], label: "<detail>"}
+    source: "via <@handle>"
+  - video: media/clip.mp4           # ZOOM IN on the proof
+    start: <seconds>
+    zoom_to: {at: 0.3, focus: [0.5, 0.4], scale: 2.0, hold: 2.0, sfx: null}
+    texts: [{at: 0.3, until: 2.3, text: "<what we're seeing>", style: label, position: top}]
+  - video: media/clip.mp4           # COMPARE: this vs that
+    start: <seconds>
+    split: {video: media/other.mp4, start: <seconds>, labels: ["<this>", "<that>"]}
+  - video: media/clip.mp4           # REACTION: you in the corner
+    start: <seconds>
+    pip: {video: media/my-face.mp4, start: 0, corner: tr, size: 0.32}
+  - layout: stat                    # VERDICT
+    kicker: Verdict
+    stat: "<number or word>"
+    label: "<one-line conclusion>"

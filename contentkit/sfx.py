@@ -41,6 +41,34 @@ RECIPES = {
                 "aecho=0.8:0.6:60|120:0.4|0.25"),
     "heartbeat": (1.0, "sin(2*PI*55*t)*(exp(-t*25)+0.8*exp(-(t-0.28)*25)*gt(t,0.28))",
                   "lowpass=f=200,volume=3"),
+    # --- meme / comedy timing ---
+    # deep sub hit with a pitch drop and long tail: the "dramatic reveal" boom
+    "vine-boom": (1.8, "(sin(2*PI*(38+140*exp(-t*9))*t)+0.5*sin(2*PI*(76+280*exp(-t*9))*t))*exp(-t*1.9)"
+                       "+0.25*(random(0)*2-1)*exp(-t*30)", "lowpass=f=900,volume=2.5"),
+    # vinyl scratch: noise swept forward then back
+    "record-scratch": (0.55, "(random(0)*2-1)*(0.6+0.4*sin(2*PI*14*t))*sin(PI*t/0.55)",
+                       "bandpass=f=1800:w=2200,vibrato=f=11:d=1,volume=4"),
+    # three-hit brass-ish airhorn
+    "airhorn": (1.2, "(0.6*sgn(sin(2*PI*466*t))+0.4*sgn(sin(2*PI*470*t)))*(lt(mod(t,0.4),0.3))*min(1,t*40)",
+                "lowpass=f=2600,highpass=f=300,volume=0.5"),
+    # dun dun dunnn: three descending stabs, last one held
+    "dramatic": (2.2, "(0.6*sin(2*PI*if(lt(t,0.35),196,if(lt(t,0.7),185,147))*t)"
+                      "+0.4*sgn(sin(2*PI*if(lt(t,0.35),98,if(lt(t,0.7),92.5,73.5))*t)))"
+                      "*if(lt(t,0.7),exp(-mod(t,0.35)*5),exp(-(t-0.7)*1.2))", "lowpass=f=1500,volume=0.8"),
+    # cartoon spring
+    "boing": (0.7, "sin(2*PI*(220+120*sin(2*PI*18*t)*exp(-t*4))*t)*exp(-t*4)", "volume=1.2"),
+    # slide whistle up
+    "slide-up": (0.8, "sin(2*PI*(400*t+900*t*t))*min(1,t*20)*min(1,(0.8-t)*10)", "lowpass=f=4000"),
+    # slide whistle down (the fail)
+    "slide-down": (0.9, "sin(2*PI*(1400*t-700*t*t))*min(1,t*20)*min(1,(0.9-t)*10)", "lowpass=f=4000"),
+    # sad trombone wah-wah, four falling notes
+    "sad-trombone": (2.4, "(0.6*sgn(sin(2*PI*if(lt(t,0.45),233,if(lt(t,0.9),220,if(lt(t,1.35),207,196)))*t))"
+                          "+0.4*sin(2*PI*if(lt(t,0.45),233,if(lt(t,0.9),220,if(lt(t,1.35),207,196)))*t))"
+                          "*(1-0.5*gt(t,1.35)*sin(2*PI*6*t))*exp(-max(t-1.35,0)*1.1)",
+                     "lowpass=f=1300,volume=0.7"),
+    # cash register / "cha-ching"
+    "cha-ching": (0.9, "0.5*sin(2*PI*2093*t)*exp(-t*6)+0.4*sin(2*PI*2637*t)*exp(-max(t-0.12,0)*6)*gt(t,0.12)"
+                       "+0.3*(random(0)*2-1)*exp(-t*40)", "highpass=f=400"),
 }
 
 
