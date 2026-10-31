@@ -592,9 +592,17 @@ def _thumbnail(recipe, brand, out_dir, stem, formats):
 
 
 def render_video(recipe, out, workdir=None, log=print):
-    """Render one video, or every format in `deliver:` (out is then a folder or base name)."""
+    """Render one video, or every format in `deliver:` (out is then a folder or base name).
+    Intermediates (~200 MB per minute of video) go to `workdir` if given and are kept;
+    otherwise to a temporary folder that is removed when the render ends or fails."""
+    if workdir:
+        return _render_video(recipe, out, Path(workdir).resolve(), log)
+    with tempfile.TemporaryDirectory(prefix="contentkit-") as tmp:
+        return _render_video(recipe, out, Path(tmp), log)
+
+
+def _render_video(recipe, out, base_work, log):
     brand = load_brand(recipe.get("brand"))
-    base_work = Path(workdir or tempfile.mkdtemp(prefix="contentkit-")).resolve()
     base_work.mkdir(parents=True, exist_ok=True)
     voice_pack = prepare_voice(recipe, base_work, log)
     grid = music_grid(recipe, log)

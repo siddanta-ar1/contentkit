@@ -222,13 +222,14 @@ def cmd_captions(a):
         words = align_script(a.text, ff.duration(src))
     if a.srt:
         print(write_srt(words, src.with_suffix(".srt")))
-    work = Path(tempfile.mkdtemp(prefix="contentkit-cap-"))
     v = next(s for s in ff.probe(src)["streams"] if s["codec_type"] == "video")
-    write_ass(words, work / "captions.ass", v["width"], v["height"], accent=a.accent, words_per_line=a.words,
-              style=a.style)
     out = Path(a.output or src.with_name(src.stem + "_captioned.mp4")).resolve()
-    ff.run(["-i", src, "-vf", f"ass=captions.ass:fontsdir='{FONT_DIR}'", "-c:v", "libx264", "-crf", 18,
-            "-pix_fmt", "yuv420p", "-c:a", "copy", out], cwd=work)
+    with tempfile.TemporaryDirectory(prefix="contentkit-cap-") as tmp:
+        work = Path(tmp)
+        write_ass(words, work / "captions.ass", v["width"], v["height"], accent=a.accent,
+                  words_per_line=a.words, style=a.style)
+        ff.run(["-i", src, "-vf", f"ass=captions.ass:fontsdir='{FONT_DIR}'", "-c:v", "libx264", "-crf", 18,
+                "-pix_fmt", "yuv420p", "-c:a", "copy", out], cwd=work)
     print(out)
 
 
