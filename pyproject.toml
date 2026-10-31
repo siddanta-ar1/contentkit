@@ -4,16 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "contentkit"
-version = "0.4.0"
+version = "0.5.0"
 description = "Open-source content studio: grid-based posters, print-ready PDFs, branded video, captions, sound and loudness"
 requires-python = ">=3.10"
 dependencies = ["Pillow>=10", "PyYAML>=6", "numpy>=1.24"]
+# optional system tools: tesseract-ocr (OCR); OpenCV comes with the `vision` extra
 
 [project.optional-dependencies]
 captions = ["faster-whisper>=1.0"]
 tts = ["piper-tts>=1.2"]
 fetch = ["yt-dlp[default]", "secretstorage"]  # secretstorage: read Chrome/Brave logins on Linux
-all = ["faster-whisper>=1.0", "piper-tts>=1.2", "yt-dlp[default]", "secretstorage"]
+vision = ["opencv-python-headless>=4.8"]
+cutout = ["rembg[cpu]"]
+all = ["faster-whisper>=1.0", "piper-tts>=1.2", "yt-dlp[default]", "secretstorage", "opencv-python-headless>=4.8"]
 
 [project.scripts]
 contentkit = "contentkit.cli:main"

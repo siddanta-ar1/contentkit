@@ -1,10 +1,11 @@
 """contentkit command line. `contentkit <command> -h` for options.
 
 Design      poster, post, print, looks, layouts, brand, safezone
+Plan        shotlist, hooks, reference
 Video       video, template, cut, captions, proof, analyze
 Audio       beats, clean, master, tts, sfx
 Assets      fetch, formats
-Setup       skill, private
+Setup       skill, private, config
 """
 import argparse
 import json
@@ -18,7 +19,7 @@ import yaml
 from . import ff, sfx
 from .formats import FORMATS
 
-PATH_KEYS = ("image", "video", "file", "logo", "brand", "look", "voice", "lut", "music")
+PATH_KEYS = ("image", "images", "video", "file", "logo", "brand", "look", "voice", "lut", "music", "avatar")
 
 
 def _load(path):
@@ -27,10 +28,21 @@ def _load(path):
     base = path.parent.resolve()
 
     # Resolve relative asset paths against the recipe's folder so recipes are portable.
+    def resolve(v):
+        return str((base / v).resolve()) if isinstance(v, str) and not Path(v).is_absolute() \
+            and (base / v).is_file() else v
+
     def fix(node):
         if isinstance(node, dict):
-            return {k: (str((base / v).resolve()) if k in PATH_KEYS and isinstance(v, str)
-                        and not Path(v).is_absolute() and (base / v).is_file() else fix(v)) for k, v in node.items()}
+            out = {}
+            for k, v in node.items():
+                if k in PATH_KEYS and isinstance(v, str):
+                    out[k] = resolve(v)
+                elif k in PATH_KEYS and isinstance(v, list):  # images: [a.jpg, b.jpg]
+                    out[k] = [resolve(x) for x in v]
+                else:
+                    out[k] = fix(v)
+            return out
         if isinstance(node, list):
             return [fix(v) for v in node]
         return node
@@ -255,6 +267,35 @@ def cmd_analyze(a):
         save(r, a.json)
 
 
+def cmd_reference(a):
+    from . import reference
+    if a.action == "analyze":
+        reference.analyze(a.target, a.output or f"refs/{Path(a.target).stem[:40] or 'reference'}", a.transcribe)
+    else:
+        if not a.media:
+            raise SystemExit("--media FOLDER is required for `reference recipe`")
+        print(reference.recipe(a.target, a.media, Path(a.output or "recipe.yaml"), a.use_audio, a.format))
+
+
+def cmd_shotlist(a):
+    from .playbook import shotlist_md
+    text = shotlist_md(a.kind)
+    if a.output:
+        Path(a.output).write_text(text)
+        print(a.output)
+    else:
+        print(text)
+
+
+def cmd_hooks(a):
+    from . import playbook
+    if a.args and a.args[0] == "collect":
+        playbook.collect(a.args[1:], a.seconds, a.browser)
+        print(f"saved in {playbook.HOOK_LIBRARY}")
+    else:
+        print(playbook.hooks_md(a.args[0] if a.args else None))
+
+
 def cmd_beats(a):
     from .beats import analyze
     info = analyze(a.song, 0, 240, a.bpm, hook_window=a.window)
@@ -262,6 +303,13 @@ def cmd_beats(a):
     print(f"bpm         {info['bpm']:.1f}\nbeat        {info['beat']:.3f}s   bar {bar:.3f}s\n"
           f"first beat  {info['first_beat']:.3f}s\nhook        {info['hook']:.2f}s  "
           f"(most energetic {a.window:g}s, on a downbeat; use music.start: hook)")
+
+
+def cmd_config(a):
+    from . import config
+    if a.key and a.value is not None:
+        config.set_value(a.key, a.value)
+    print(yaml.safe_dump(config.load(), sort_keys=True) or "{}")
 
 
 def cmd_private(a):
@@ -427,10 +475,32 @@ def main(argv=None):
     s.add_argument("--kind", default="meme", choices=["meme", "remix", "commentary", "brand"])
     s.add_argument("--json", metavar="FILE", help="also write the report as JSON")
 
+    s = cmd("reference", cmd_reference, "copy an edit's structure: analyze a reference video, then build a recipe")
+    s.add_argument("action", choices=["analyze", "recipe"])
+    s.add_argument("target", help="URL or file (analyze) / analysis.json (recipe)")
+    s.add_argument("-o", "--output")
+    s.add_argument("--media", help="recipe: folder with your photos/clips")
+    s.add_argument("--use-audio", action="store_true", help="recipe: keep the reference's audio track")
+    s.add_argument("--format", default="reel")
+    s.add_argument("--transcribe", action="store_true", help="analyze: transcribe speech (faster-whisper)")
+
+    s = cmd("shotlist", cmd_shotlist, "shot list + shoot checklist for a job type")
+    s.add_argument("kind", help="hotel birthday food product real-estate wedding event talking-head")
+    s.add_argument("-o", "--output", help="write markdown to a file")
+
+    s = cmd("hooks", cmd_hooks, "hook formulas, or `hooks collect URL ...` to save video openings")
+    s.add_argument("args", nargs="*", help="category, or: collect URL [URL ...]")
+    s.add_argument("--seconds", type=float, default=3.0)
+    s.add_argument("--browser")
+
     s = cmd("beats", cmd_beats, "tempo, first beat and hook (most energetic part) of a song")
     s.add_argument("song")
     s.add_argument("--bpm", type=float, help="skip tempo detection")
     s.add_argument("--window", type=float, default=20, help="hook length in seconds")
+
+    s = cmd("config", cmd_config, "show or set a setting, e.g. `config ocr_langs eng+nep`")
+    s.add_argument("key", nargs="?")
+    s.add_argument("value", nargs="?")
 
     s = cmd("private", cmd_private, "private mode: content stays on this machine")
     s.add_argument("state", choices=["on", "off", "status"])

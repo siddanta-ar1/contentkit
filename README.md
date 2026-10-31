@@ -25,6 +25,11 @@ upload of client material.
 - [Music-driven edits](#music-driven-edits)
 - [Meme, reaction and commentary edits](#meme-reaction-and-commentary-edits)
 - [Critique an edit](#critique-an-edit)
+- [Copy an edit from a reference](#copy-an-edit-from-a-reference)
+- [Meme and funny posters](#meme-and-funny-posters)
+- [Footage fixes and meme placement](#footage-fixes-and-meme-placement)
+- [Plan the shoot and the hook](#plan-the-shoot-and-the-hook)
+- [Open-source projects inside](#open-source-projects-inside)
 - [Use it from any project (agent skill)](#use-it-from-any-project-agent-skill)
 - [Audio](#audio)
 - [Colour looks](#colour-looks)
@@ -412,6 +417,97 @@ near-identical framings of the same action doesn't either. `--json report.json` 
 numbers. The agent skill runs it after every render and fixes what it flags (target 80+).
 The example above is the meme test before a music bed was added; after, it scores 100.
 
+## Copy an edit from a reference
+
+Give it a video that works and it measures the edit, then rebuilds that structure on your footage.
+
+```bash
+contentkit reference analyze "https://www.instagram.com/reel/…" -o refs/coffee-trend
+contentkit reference recipe refs/coffee-trend/analysis.json --media content/job/media -o content/job/recipe.yaml
+```
+
+`analyze` writes `reference.mp4`, `audio.wav`, `analysis.json`, `ANALYSIS.md` (a shot table
+and a beat sheet to fill in) and `shots.jpg` (one still per shot). For every shot it records
+start, length, framing (from the largest face: wide / medium / close-up), on-screen text
+and where it sits (OCR), and how much moves. For the whole video it records cut rhythm, BPM,
+the share of cuts that land on the beat, loudness, the hook (first cut, text and face on the
+first frame) and whether the video loops; `--transcribe` adds the speech.
+
+`recipe` writes a recipe with the same number of shots, the same lengths (or beat counts
+when the reference cuts on the beat), text at the same positions and times, filled with
+your media in order. Borrowed text comes in as `<rewrite: original>`, and contentkit refuses
+to render a recipe that still has `<…>` placeholders. `--use-audio` keeps the reference's
+sound track: fine for private edits, but platforms demote reused audio and footage
+(Meta's originality rules, 2025), so for posting use your own or in-app audio.
+
+## Meme and funny posters
+
+| Layout | Fields | Use |
+|---|---|---|
+| `meme` | `image`, `top`, `bottom` | classic image macro (white Anton, black outline) |
+| `versus` | `images: [a, b]`, `labels`, `title` | expectation vs reality, before/after, nope/yep |
+| `post` | `text`, `name`, `handle`, `avatar`, `image`, `meta` | a text post card under *your own* name, no platform logos |
+| `comic` | `panels: [{image, caption, speech}]`, `title` | 2–4 panel strip with caption boxes and speech bubbles |
+
+Examples in `examples/memes/`. They work in every format, carousels included.
+
+## Footage fixes and meme placement
+
+```yaml
+- video: media/handheld.mp4
+  stabilize: true            # two-pass vidstab (deshake if ffmpeg lacks it); "strong" smooths more
+  denoise: light             # light | medium | strong (nlmeans), for low-light shots
+  reframe: auto              # horizontal clip in a vertical reel: crop follows the face (OpenCV)
+  overlay:                   # green-screen meme clip keyed over your footage
+    - {video: memes/explosion-gs.mp4, at: 1.2, until: 2.6, key: green, position: center, scale: 0.8}
+  stickers:                  # image on top; cutout: true removes its background (rembg)
+    - {image: memes/thumbs-up.png, at: 0.5, until: 2.0, position: br, scale: 0.3}
+```
+
+`key` takes `green`, `blue`, `black`, `white`, a hex colour, or `none` (no keying). Positions:
+`center top bottom left right tl tr bl br full`, kept inside the platform safe zone.
+
+## Plan the shoot and the hook
+
+```bash
+contentkit shotlist hotel          # birthday food product real-estate wedding event talking-head
+contentkit hooks                   # hook formulas: pov curiosity contrarian story list challenge reaction local
+contentkit hooks collect URL URL --seconds 3   # save just the openings of videos you want to study
+```
+
+Shot lists give the shot, framing/move, how long to roll and why, plus a shoot checklist
+(vertical 4K, locked exposure, 45° window light, handles, room tone, one look-to-lens shot).
+`hooks collect` keeps the first seconds of each video with its hook-frame text and framing
+in `~/.contentkit/hooks/index.json`.
+
+`contentkit analyze` also checks viral readiness: readable text on the hook frame, a face
+on it, motion in the first second, whether the video loops, and soft or badly exposed
+shots. These are proxies for what platforms reward (watch-vs-skip, completion, replays),
+not a prediction: no tool can promise a video goes viral.
+
+**Growing an audience** (summarised in the agent skill): platforms rank on watch time,
+completion, replays and shares; accounts that repost others' videos or audio lose reach
+on everything; "tag a friend / comment YES" captions are demoted; under 30 s with the
+payoff before the end, and a loop to frame 1, earns replays.
+
+## Open-source projects inside
+
+| Project | License | What contentkit uses it for |
+|---|---|---|
+| [FFmpeg](https://ffmpeg.org) (+ libass, vidstab, chromakey, loudness filters) | LGPL/GPL | every render, captions, stabilisation, keying, audio |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Unlicense | downloads from YouTube, Instagram, Facebook, TikTok, X, Reddit … |
+| [OpenCV](https://opencv.org) + [YuNet](https://github.com/opencv/opencv_zoo) face model | Apache-2.0 / MIT | face framing, auto-reframe, hook-frame checks |
+| [Tesseract](https://github.com/tesseract-ocr/tesseract) | Apache-2.0 | reading on-screen text in references (English; Nepali opt-in) |
+| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | MIT | word-timed captions, transcripts |
+| [Piper](https://github.com/OHF-Voice/piper1-gpl) | GPL-3.0 | offline voiceover |
+| [rembg](https://github.com/danielgatis/rembg) (optional) | MIT | sticker background removal |
+| Pillow, NumPy, PyYAML | MIT-CMU / BSD / MIT | layout, imaging, recipes |
+
+Considered and left out for now: **auto-editor** and **PySceneDetect** (contentkit's own
+silence cutting and pulse-aware cut detection cover their use here), **Demucs** (vocal
+removal, needs PyTorch and ~2 GB) and **Real-ESRGAN** (upscaling, needs a GPU to be
+practical). Both are worth adding on a machine with the disk and GPU for them.
+
 ## Use it from any project (agent skill)
 
 ```bash
@@ -508,12 +604,16 @@ contentkit proof out/carousel --cols 5 --title "Brew guide"               # boar
 | `proof` | Contact sheet for a video or a board of images |
 | `safezone` | Platform UI overlay on an image or video frame |
 | `looks` | List, preview, or export looks as `.cube` |
-| `layouts` | List layouts |
+| `layouts` | List layouts (11: 7 design + 4 meme/funny) |
 | `brand` | `init` a brand kit from a preset; `presets` |
 | `sfx` | Sound library: `init list play add` |
 | `tts` | Text to speech |
 | `fetch` | Download by URL (YouTube, Instagram, Facebook, TikTok, X …) or `--search "song"`; `--browser` login; `--list` the library |
-| `analyze` | Critique an edit: hook, pacing, dead air, loudness, defects, score |
+| `analyze` | Critique an edit: hook, pacing, dead air, loudness, defects, viral readiness, footage QC |
+| `reference` | `analyze URL|file`, `recipe analysis.json --media DIR`: copy an edit's structure |
+| `shotlist` | Shot list + shoot checklist for a job type |
+| `hooks` | Hook formulas; `hooks collect URL …` saves video openings |
+| `config` | Show or set settings (`ocr_langs eng+nep`) |
 | `beats` | Song tempo, first beat and hook |
 | `template` | `list`, `new NAME DIR`: start a job (birthday-remix, hotel-remix, meme-edit, commentary) |
 | `skill` | `install [global|PROJECT]`, `show`: the Claude Code skill |
@@ -575,7 +675,10 @@ contentkit/
   audio.py      voice chain, two-pass loudness, silence-cut jump edits
   beats.py      tempo, beat phase and hook detection
   edits.py      meme / commentary edits: zoom_to, freeze, speed, header, meme text, callouts, split, pip
-  analyze.py    edit critique: hook, pacing, dead air, loudness, defects
+  analyze.py    edit critique: hook, pacing, dead air, loudness, defects, viral readiness, footage QC
+  reference.py  reference analysis and recipe rebuilding
+  vision.py     faces (YuNet), OCR (Tesseract), sharpness, exposure, motion
+  playbook.py   shot lists, hook formulas, hook collection
   config.py     ~/.contentkit/config.yaml (private mode)
   templates/    job templates (birthday-remix, hotel-remix, meme-edit, commentary)
   skill/        the Claude Code skill installed by `contentkit skill install`
@@ -651,6 +754,13 @@ conservative value is used, and every value can be overridden.
 | Captions missing | ffmpeg needs libass (distro builds have it); captions need a voiceover |
 
 ## Changelog
+
+**0.5.0**: references, memes as posters, premium fixes, planning.
+Reference analysis and recipe rebuilding (`contentkit reference`); placeholder guard;
+`meme`, `versus`, `post` and `comic` layouts; hard line breaks in type; stabilise,
+denoise and face-following auto-reframe; green-screen meme overlays and stickers with
+optional rembg cutouts; viral-readiness and footage-QC checks in `analyze`; vision module
+(YuNet faces, Tesseract OCR); shot lists, hook formulas and `hooks collect`; `config`.
 
 **0.4.0**: comedy, commentary and critique.
 Meme and commentary edits on any scene (POV header, meme text, timed text, red
