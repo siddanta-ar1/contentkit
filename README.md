@@ -356,6 +356,11 @@ Any `video:` scene can take these (photos take the overlays too):
   source: "via @handle"                                          # credit for clipped footage
 ```
 
+Two scene options built for punchlines: `mute_music: true` cuts the music dead as that
+scene starts (the silence is what makes a sad-trombone or record-scratch land), and
+`look: noir` (or any look / `.cube`) grades just that scene, for example a black-and-white
+"it's over" ending.
+
 `focus` and `rect` are fractions of the frame (0–1): read them off a proof sheet. Text
 styles: `meme` (white Anton with black outline), `label` (annotation plate), `plain`.
 Callout shapes: `circle`, `box`, `arrow`. Zoom and freeze bring their sound automatically;

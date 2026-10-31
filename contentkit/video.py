@@ -201,8 +201,9 @@ def _render_scene(i, scene, fmt, brand, work, lut, platform, look, caption_band=
         zoom = edits.zoom_filter(scene, w, vh, fps)
         if zoom:
             vf += "," + zoom
-        if lut and scene.get("grade", True):
-            vf += f",lut3d=file='{lut}':interp=tetrahedral"
+        scene_lut = fx.lut_for(scene["look"], work) if scene.get("look") else lut  # per-scene look
+        if scene_lut and scene.get("grade", True):
+            vf += f",lut3d=file='{scene_lut}':interp=tetrahedral"
         if hdr:
             png = edits.header_png(scene["header"], w, hdr, brand, work / f"header_{i:03d}.png")
             vf += f",pad={w}:{h}:0:{hdr}:color=white[hb];"
@@ -430,7 +431,7 @@ def prepare_voice(recipe, work, log=print):
     return voice, length, delay, words
 
 
-def _mix(recipe, joined, voice, delay, cues, total, work, grid=None):
+def _mix(recipe, joined, voice, delay, cues, total, work, grid=None, music_stop=None):
     inputs, graph, mix, n = ["-i", joined], [], ["[0:a]"], 1
     rate = ENCODE["audio_rate"]
     fmt = f"aformat=sample_rates={rate}:channel_layouts=stereo"
@@ -449,8 +450,12 @@ def _mix(recipe, joined, voice, delay, cues, total, work, grid=None):
         inputs += ["-stream_loop", -1, "-ss", f"{start:.3f}", "-i", Path(music["file"]).resolve()]
         # synced edits start on a downbeat: a long fade-in would smear the first hit
         fade_in = music.get("fade_in", 0.02 if grid else 0.6)
+        # a scene with `mute_music: true` cuts the music dead (80 ms) as it starts: the
+        # silence before a punchline sound is what makes it land
+        end = f"afade=t=out:st={max(music_stop - 0.08, 0):.3f}:d=0.08" if music_stop is not None \
+            else f"afade=t=out:st={max(total - 1.8, 0)}:d=1.8"
         chain = (f"[{n}:a]{fmt},atrim=0:{total},volume={music.get('volume', 0.3)},"
-                 f"afade=t=in:d={fade_in},afade=t=out:st={max(total - 1.8, 0)}:d=1.8")
+                 f"afade=t=in:d={fade_in},{end}")
         if duck_key and music.get("duck", True):
             graph.append(f"{chain}[mraw];[mraw]{duck_key}sidechaincompress=threshold=0.02:ratio=10:attack=15:"
                          f"release=350[mus]")
@@ -527,7 +532,8 @@ def render_format(recipe, fmt_name, out, work, brand, voice_pack, log=print, gri
     if abs(got - total) > 2 / fmt["fps"]:
         raise RuntimeError(f"joined timeline is {got:.2f}s, expected {total:.2f}s (transition longer than a scene?)")
 
-    raw = _mix(recipe, joined, voice, delay, _cues(recipe, scenes, trans, starts, grid), total, work, grid)
+    stop = next((starts[k] for k, sc in enumerate(scenes) if sc.get("mute_music")), None)
+    raw = _mix(recipe, joined, voice, delay, _cues(recipe, scenes, trans, starts, grid), total, work, grid, stop)
     loud = audio.master(raw, work / "mix.wav")
 
     vf = []
