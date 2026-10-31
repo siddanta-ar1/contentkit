@@ -186,8 +186,11 @@ def _render_scene(i, scene, fmt, brand, work, lut, platform, look, caption_band=
         src = scene["video"]
         hdr = round(h * (0.24 if h > w else 0.18)) if scene.get("header") else 0
         vh = h - hdr
-        inputs += ["-ss", scene.get("start", 0), "-t", f"{edits.source_seconds(scene, dur):.3f}", "-i", src]
-        timing = ",".join(edits.timing_video(scene, fps))
+        src_secs = edits.source_seconds(scene, dur)
+        inputs += ["-ss", scene.get("start", 0), "-t", f"{src_secs:.3f}", "-i", src]
+        fixes = [f for f in (edits.stabilize_prepass(scene, src, scene.get("start", 0), src_secs, work, i),
+                             edits.denoise_filter(scene)) if f]
+        timing = ",".join(fixes + edits.timing_video(scene, fps))
         if scene.get("split"):
             pre_graph.append(f"[0:v]{timing}[raw]")
             s_in, s_graph, base, n_in = edits.split_graph(scene, w, vh, fps, dur, "[raw]", n_in, brand, work, i,
@@ -196,8 +199,18 @@ def _render_scene(i, scene, fmt, brand, work, lut, platform, look, caption_band=
             pre_graph += s_graph
             vf = f"{base}null"
         else:
-            vf = (f"[0:v]{timing},scale={w}:{vh}:force_original_aspect_ratio=increase:flags=lanczos,"
-                  f"crop={w}:{vh}:(iw-{w})*{focus[0]}:(ih-{vh})*{focus[1]},setsar=1")
+            rf = None
+            if scene.get("reframe") == "auto":
+                sv = next(st for st in ff.probe(src)["streams"] if st["codec_type"] == "video")
+                rf = edits.reframe_expr(scene, src, scene.get("start", 0), src_secs, int(sv["width"]),
+                                        int(sv["height"]), w, vh, fps)
+            if rf:  # follow the face: crop a w:vh window that pans with it, then scale
+                cw, ch, xexpr = rf
+                vf = (f"[0:v]{timing},crop={cw}:{ch}:'{xexpr}':(ih-{ch})/2,"
+                      f"scale={w}:{vh}:flags=lanczos,setsar=1")
+            else:
+                vf = (f"[0:v]{timing},scale={w}:{vh}:force_original_aspect_ratio=increase:flags=lanczos,"
+                      f"crop={w}:{vh}:(iw-{w})*{focus[0]}:(ih-{vh})*{focus[1]},setsar=1")
         zoom = edits.zoom_filter(scene, w, vh, fps)
         if zoom:
             vf += "," + zoom
@@ -263,6 +276,9 @@ def _render_scene(i, scene, fmt, brand, work, lut, platform, look, caption_band=
                      f"fade=t=out:st={start + hold - 0.4}:d=0.35:alpha=1[l{n_in}];"
                      f"{last}[l{n_in}]overlay=x='{lx}-{rise * 2}*(1-{_ease(p)})':y={ly}[o{n_in}]")
         last, n_in = f"[o{n_in}]", n_in + 1
+    m_in, m_graph, last, n_in = edits.placement_graph(scene, w, h, fps, dur, platform, work, i, last, n_in)
+    inputs += m_in
+    graph += m_graph
     o_in, o_graph, last, n_in = edits.overlay_graph(scene, w, h, fps, dur, brand, platform, work, i, last, n_in)
     inputs += o_in
     graph += o_graph
@@ -597,10 +613,22 @@ def _thumbnail(recipe, brand, out_dir, stem, formats):
     return made
 
 
+def placeholders(node, path=""):
+    """`<...>` values left in a recipe (template slots, `<rewrite: ...>` lines)."""
+    if isinstance(node, dict):
+        return [p for k, v in node.items() for p in placeholders(v, f"{path}.{k}" if path else k)]
+    if isinstance(node, list):
+        return [p for i, v in enumerate(node) for p in placeholders(v, f"{path}[{i}]")]
+    return [f"{path}: {node}"] if isinstance(node, str) and re.search(r"<[^<>\n]{2,}>", node) else []
+
+
 def render_video(recipe, out, workdir=None, log=print):
     """Render one video, or every format in `deliver:` (out is then a folder or base name).
     Intermediates (~200 MB per minute of video) go to `workdir` if given and are kept;
     otherwise to a temporary folder that is removed when the render ends or fails."""
+    left = placeholders(recipe)
+    if left:
+        raise SystemExit("Fill these before rendering:\n  " + "\n  ".join(left[:20]))
     if workdir:
         return _render_video(recipe, out, Path(workdir).resolve(), log)
     with tempfile.TemporaryDirectory(prefix="contentkit-") as tmp:

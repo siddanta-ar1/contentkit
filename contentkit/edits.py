@@ -22,6 +22,8 @@ Edits that come with a sound (zoom_to: vine-boom, freeze: record-scratch) add it
 automatically unless `sfx: null` is set on the edit.
 """
 import math
+import subprocess
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
@@ -334,3 +336,130 @@ def split_graph(scene, w, h, fps, dur, base, n_in, brand, work, i, focus=(0.5, 0
         g.append(f"[{n}:v]format=rgba[sl];[sp][sl]overlay=0:0[spl]")
         last, n = "[spl]", n + 1
     return inputs, g, last, n
+
+
+# --- premium footage fixes --------------------------------------------------------------
+
+DENOISE = {"light": "hqdn3d=1.5:1.5:3:3", "medium": "hqdn3d=3:2.5:5:4", "strong": "nlmeans=s=3:p=5:r=11"}
+
+
+def denoise_filter(scene):
+    d = scene.get("denoise")
+    if not d:
+        return None
+    return DENOISE["medium" if d is True else d]
+
+
+def stabilize_prepass(scene, src, start, seconds, work, i):
+    """vidstab pass 1 (motion analysis) on just the used part of the clip. Returns the
+    transform filter for pass 2, or deshake when ffmpeg lacks vidstab."""
+    if not scene.get("stabilize"):
+        return None
+    from . import ff
+    filters = subprocess.run(["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True).stdout
+    if "vidstabdetect" not in filters:
+        return "deshake"
+    trf = work / f"stab_{i:03d}.trf"
+    ff.run(["-ss", start, "-t", f"{seconds:.3f}", "-i", src, "-vf",
+            f"vidstabdetect=shakiness=6:accuracy=12:result={trf.name}", "-f", "null", "-"], cwd=work)
+    smooth = 30 if scene["stabilize"] == "strong" else 15
+    # optzoom=1 crops in just enough to hide the moving borders
+    return f"vidstabtransform=input={trf.resolve()}:smoothing={smooth}:optzoom=1:interpol=bicubic"
+
+
+def reframe_expr(scene, src, start, seconds, src_w, src_h, out_w, out_h, fps):
+    """Auto-reframe: follow the largest face with a smoothed crop window (e.g. 16:9 -> 9:16).
+    Returns (crop_w, crop_h, x_expression) or None when no faces are found."""
+    from . import vision
+    crop_w = min(src_w, round(src_h * out_w / out_h / 2) * 2)
+    crop_h = min(src_h, round(crop_w * out_h / out_w / 2) * 2)
+    if crop_w >= src_w:
+        return None
+    step = 0.4
+    times, centers, last = [], [], 0.5
+    t = 0.0
+    while t <= seconds:
+        f = vision.faces(vision.frame_at(src, float(start) + t, 480))
+        if f is None:
+            return None
+        if f:
+            last = f[0][0] + f[0][2] / 2
+        times.append(t)
+        centers.append(last)
+        t += step
+    if not any(c != 0.5 for c in centers):
+        return None
+    # smooth: moving average, so the virtual camera pans instead of jittering
+    k = 3
+    sm = [sum(centers[max(0, j - k):j + k + 1]) / len(centers[max(0, j - k):j + k + 1]) for j in range(len(centers))]
+    xs = [min(max(c * src_w - crop_w / 2, 0), src_w - crop_w) for c in sm]
+    expr = f"{xs[-1]:.1f}"
+    for j in range(len(xs) - 2, -1, -1):  # piecewise-linear interpolation between samples
+        t0, t1, a, b = times[j], times[j + 1], xs[j], xs[j + 1]
+        expr = f"if(lt(t,{t1:.2f}),{a:.1f}+({b - a:.1f})*(t-{t0:.2f})/{t1 - t0:.2f},{expr})"
+    return crop_w, crop_h, expr
+
+
+# --- meme placement: green-screen clips and stickers ---------------------------------------
+
+KEYS = {"green": "0x00d000", "blue": "0x0047bb", "black": "0x000000", "white": "0xffffff"}
+
+
+def _place(position, ow, oh, w, h, platform):
+    z = safe_zone(w, h, platform)
+    m = round(min(w, h) * 0.04)
+    pos = position or "center"
+    x = {"l": m + z["left"], "c": (w - ow) // 2, "r": w - ow - m - z["right"]}
+    y = {"t": m + z["top"], "c": (h - oh) // 2, "b": h - oh - m - z["bottom"]}
+    key = {"center": "cc", "top": "ct", "bottom": "cb", "left": "lc", "right": "rc", "tl": "lt", "tr": "rt",
+           "bl": "lb", "br": "rb", "full": "full"}[pos]
+    if key == "full":
+        return 0, 0
+    return x[key[0]], y[key[1]]
+
+
+def _cutout(image, work, i, k):
+    """Background removal for stickers via rembg (pip install rembg), cached per file."""
+    try:
+        from rembg import remove
+    except ImportError:
+        raise SystemExit("`cutout: true` needs rembg: pip install 'rembg[cpu]' (or pass a PNG with transparency)")
+    out = work / f"cutout_{i:03d}_{k}.png"
+    out.write_bytes(remove(Path(image).read_bytes()))
+    return out
+
+
+def placement_graph(scene, w, h, fps, dur, platform, work, i, last, n_in):
+    """`overlay:` green-screen meme clips and `stickers:` images, each with a time window."""
+    inputs, graph = [], []
+    for k, o in enumerate(scene.get("overlay", [])):
+        at = float(o.get("at", 0))
+        until = float(o.get("until", dur))
+        scale = float(o.get("scale", 0.7 if o.get("position", "center") != "full" else 1.0))
+        ow = round(w * scale / 2) * 2
+        inputs += ["-ss", o.get("start", 0), "-t", f"{until - at:.3f}", "-i", o["video"]]
+        key = o.get("key", "green")
+        color = KEYS.get(key, key.replace("#", "0x"))
+        sim, blend = o.get("similarity", 0.16), o.get("blend", 0.08)
+        chain = f"[{n_in}:v]fps={fps},scale={ow}:-2,format=yuva420p"
+        if key != "none":
+            chain += f",chromakey={color}:{sim}:{blend}" + (",despill=green" if key == "green" else "")
+        chain += f",setpts=PTS-STARTPTS+{at}/TB[gk{n_in}]"
+        oh_guess = round(ow * 16 / 9) if o.get("tall") else round(ow * 9 / 16)
+        x, y = _place(o.get("position"), ow, oh_guess, w, h, platform)
+        graph.append(f"{chain};{last}[gk{n_in}]overlay=x={x}:y={y}:eof_action=pass:"
+                     f"enable='between(t,{at},{until})'[go{n_in}]")
+        last, n_in = f"[go{n_in}]", n_in + 1
+    for k, st in enumerate(scene.get("stickers", [])):
+        img = _cutout(st["image"], work, i, k) if st.get("cutout") else st["image"]
+        at, until = float(st.get("at", 0)), float(st.get("until", dur))
+        sw = round(w * float(st.get("scale", 0.35)) / 2) * 2
+        from PIL import Image as _I
+        with _I.open(img) as im:
+            sh = round(sw * im.height / im.width / 2) * 2
+        x, y = _place(st.get("position", "br"), sw, sh, w, h, platform)
+        inputs += ["-loop", 1, "-framerate", fps, "-t", dur, "-i", img]
+        graph.append(f"[{n_in}:v]format=rgba,scale={sw}:{sh}[sk{n_in}];"
+                     f"{last}[sk{n_in}]overlay=x={x}:y={y}:enable='between(t,{at},{until})'[so{n_in}]")
+        last, n_in = f"[so{n_in}]", n_in + 1
+    return inputs, graph, last, n_in

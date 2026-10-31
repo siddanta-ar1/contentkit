@@ -1,0 +1,7 @@
+layout: versus
+brand: ../brand.yaml
+format: portrait
+title: Opening a café
+images: [../assets/photos/barista.jpg, ../assets/photos/coffee-cup.jpg]
+focus: [[0.5, 0.3], [0.35, 0.55]]
+labels: ["What I pictured", "What I sell"]

@@ -1,0 +1,9 @@
+layout: comic
+brand: ../brand.yaml
+format: portrait
+title: Monday at the bar
+panels:
+  - {image: ../assets/photos/barista.jpg, focus: [0.4, 0.3], caption: "6:30 AM", speech: "Just one shot to wake up."}
+  - {image: ../assets/photos/coffee-brew.jpg, caption: "6:45 AM", speech: "Okay, two."}
+  - {image: ../assets/photos/coffee-cup.jpg, focus: [0.35, 0.55], caption: "7:00 AM", speech: "I can hear colours."}
+  - {image: ../assets/photos/guitarist.jpg, focus: [0.62, 0.45], caption: "7:15 AM", speech: "We're starting a band."}

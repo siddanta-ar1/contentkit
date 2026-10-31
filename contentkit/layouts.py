@@ -428,11 +428,147 @@ def offer(p, c):
             typo.draw(p.draw, blk, x, by)
 
 
+# --- meme / funny posters -------------------------------------------------------------
+
+def _meme_text(p, text, box, valign="top", size=12):
+    from .edits import _stroked
+    st = Style("Anton", size * p.u, color="#ffffff", upper=True, leading=1.04)
+    _stroked(p.draw, text, st, box, stroke=max(3, round(p.u * 0.9)), valign=valign)
+
+
+def meme(p, c):
+    """Classic image macro: photo edge to edge, white outlined caps top and bottom."""
+    u = p.u
+    p.photo(c["image"], (p.x0, p.y0, p.x0 + p.w, p.y0 + p.h), c.get("focus", (0.5, 0.5)),
+            c.get("look", "natural"), grain=0)
+    m = 3.5 * u
+    if c.get("top"):
+        _meme_text(p, c["top"], (p.x0 + m, p.top - 2 * u, p.w - 2 * m, p.h * 0.28))
+    if c.get("bottom"):
+        _meme_text(p, c["bottom"], (p.x0 + m, p.bottom - p.h * 0.28 + 2 * u, p.w - 2 * m, p.h * 0.28), "bottom")
+    if c.get("handle", p.brand.handle):
+        p.label(c.get("handle", p.brand.handle), p.left, p.bottom + 2 * u, "#ffffff", p.inner_w, "right",
+                size=1.6 * u)
+
+
+def versus(p, c):
+    """Two panels with labels: expectation vs reality, before/after, nope/yep."""
+    b, u = p.brand, p.u
+    imgs, labels = c["images"][:2], (c.get("labels") or ["", ""])[:2]
+    stacked = p.h >= p.w
+    top = p.y0
+    if c.get("title"):
+        p.fill(b.ink, (0, 0, p.W, p.y0 + p.h * 0.12))
+        st = p.body_style(b.paper, 4.6 * u, strong=True)
+        blk = typo.fit(c["title"], st, p.inner_w, height=p.h * 0.08, max_lines=2)
+        typo.draw(p.draw, blk, p.left, p.y0 + (p.h * 0.12 - blk.height) / 2, p.inner_w, "center")
+        top = p.y0 + p.h * 0.12
+    for k, (img, lab) in enumerate(zip(imgs, labels)):
+        if stacked:
+            ph = (p.y0 + p.h - top) / 2
+            rect = (p.x0, top + k * ph, p.x0 + p.w, top + (k + 1) * ph)
+        else:
+            pw = p.w / 2
+            rect = (p.x0 + k * pw, top, p.x0 + (k + 1) * pw, p.y0 + p.h)
+        p.photo(img, rect, (c.get("focus") or [(0.5, 0.5), (0.5, 0.5)])[k], c.get("look", "natural"), grain=0)
+        if lab:
+            st = p.body_style("#ffffff", 4.4 * u, strong=True)
+            blk = typo.layout(lab, st, p.inner_w * 0.8)
+            pad = 1.8 * u
+            x, y = rect[0] + 3 * u + (p.bleed if k == 0 or stacked else 0), rect[1] + 3 * u + (p.bleed if k == 0 else 0)
+            p.draw.rectangle((x, y, x + blk.width + 2 * pad, y + blk.height + 2 * pad + st.size * 0.25),
+                             fill=b.ink if k == 0 else b.accent)
+            typo.draw(p.draw, blk, x + pad, y + pad)
+    if stacked:
+        p.rule(p.x0, top + (p.y0 + p.h - top) / 2 - p.hair * 2, p.w, "#ffffff", p.hair * 4)
+
+
+def post(p, c):
+    """Text-post card under your own name and handle (no platform logos or UI)."""
+    b, u = p.brand, p.u
+    p.fill(c.get("bg", b.paper))
+    card_w = p.inner_w
+    x = p.left
+    av = 9 * u
+    y = p.top + (p.bottom - p.top) * (0.18 if not c.get("image") else 0.06)
+    if c.get("avatar"):
+        from PIL import ImageDraw as _D
+        im = fx.cover(Image.open(c["avatar"]), round(av), round(av), c.get("avatar_focus", (0.5, 0.4)))
+        mask = Image.new("L", im.size, 0)
+        _D.Draw(mask).ellipse((0, 0, im.width - 1, im.height - 1), fill=255)
+        p.img.paste(im, (round(x), round(y)), mask)
+    else:
+        p.draw.ellipse((x, y, x + av, y + av), fill=b.accent)
+        ini = (c.get("name") or b.name or "?")[:1].upper()
+        st = Style(b.text_strong, av * 0.5, color="#ffffff")
+        blk = typo.layout(ini, st, av)
+        typo.draw(p.draw, blk, x, y + (av - blk.height) / 2, av, "center")
+    nx = x + av + 3 * u
+    st = p.body_style(b.ink, 3.4 * u, strong=True)
+    typo.draw(p.draw, typo.layout(c.get("name") or b.name, st, card_w - av), nx, y + 1.2 * u)
+    p.label(c.get("handle") or b.handle, nx, y + 5.6 * u, b.muted, card_w - av)
+    ts = Style(b.text, 6.2 * u, color=b.ink, leading=1.28, balance=False, tracking=-8, em_font=b.text_strong,
+               em_color=b.accent)
+    body_h = (p.bottom - y - av - 6 * u) * (0.45 if c.get("image") else 0.8)
+    blk = typo.fit(c["text"], ts, card_w, height=body_h, min_size=round(3 * u))
+    ty = y + av + 5 * u
+    last = typo.draw(p.draw, blk, x, ty)
+    if c.get("image"):
+        iy = last + 5 * u
+        p.photo(c["image"], (x, iy, x + card_w, min(p.bottom - 6 * u, iy + card_w * 0.75)),
+                c.get("focus", (0.5, 0.5)), c.get("look", "natural"), grain=0)
+    if c.get("meta"):
+        p.label(c["meta"], x, p.bottom - 2 * u, b.muted, card_w)
+
+
+def comic(p, c):
+    """2-4 panel strip. Each panel: image, optional caption box and speech line."""
+    b, u = p.brand, p.u
+    panels = c["panels"][:4]
+    p.fill(c.get("bg", "#ffffff"))
+    gut = 2.4 * u
+    top = p.top
+    if c.get("title"):
+        st = Style("Anton", 7 * u, color=b.ink, upper=True)
+        blk = typo.fit(c["title"], st, p.inner_w, max_lines=1)
+        typo.draw(p.draw, blk, p.left, top)
+        top += blk.height + 4 * u
+    n = len(panels)
+    cols = 1 if (n <= 2 and p.h > p.w) or n == 1 else 2
+    rows = (n + cols - 1) // cols
+    pw = (p.inner_w - (cols - 1) * gut) / cols
+    ph = (p.bottom - top - (rows - 1) * gut) / rows
+    border = max(3, round(0.5 * u))
+    for k, pan in enumerate(panels):
+        x = p.left + (k % cols) * (pw + gut)
+        y = top + (k // cols) * (ph + gut)
+        p.photo(pan["image"], (x, y, x + pw, y + ph), pan.get("focus", (0.5, 0.5)), pan.get("look", "natural"),
+                grain=0)
+        p.draw.rectangle((x, y, x + pw, y + ph), outline="#111111", width=border)
+        st = Style("Inter:semibold", 3.4 * u, color="#111111", leading=1.2, balance=True)
+        if pan.get("caption"):
+            blk = typo.fit(pan["caption"], st, pw - 6 * u, height=ph * 0.22, max_lines=3)
+            p.draw.rectangle((x, y, x + blk.width + 4 * u, y + blk.height + 4 * u), fill="#fff6d6",
+                             outline="#111111", width=border)
+            typo.draw(p.draw, blk, x + 2 * u, y + 2 * u)
+        if pan.get("speech"):
+            blk = typo.fit(pan["speech"], st, pw * 0.7, height=ph * 0.25, max_lines=3)
+            bx, by = x + pw - blk.width - 7 * u, y + ph - blk.height - 8 * u
+            p.draw.rounded_rectangle((bx, by, bx + blk.width + 4 * u, by + blk.height + 4 * u), radius=3 * u,
+                                     fill="#ffffff", outline="#111111", width=border)
+            tail = [(bx + 4 * u, by + blk.height + 4 * u - border), (bx + 2 * u, by + blk.height + 8 * u),
+                    (bx + 8 * u, by + blk.height + 4 * u - border)]
+            p.draw.polygon(tail, fill="#ffffff", outline="#111111")
+            typo.draw(p.draw, blk, bx + 2 * u, by + 2 * u)
+
+
 LAYOUTS = {"editorial": editorial, "swiss": swiss, "split": split, "quote": quote,
-           "stat": stat, "event": event, "offer": offer}
+           "stat": stat, "event": event, "offer": offer,
+           "meme": meme, "versus": versus, "post": post, "comic": comic}
 
 REQUIRED = {"editorial": ("title", "image"), "swiss": ("title",), "split": ("title", "image"),
-            "quote": ("quote",), "stat": ("stat",), "event": ("title", "image"), "offer": ("title", "image")}
+            "quote": ("quote",), "stat": ("stat",), "event": ("title", "image"), "offer": ("title", "image"),
+            "meme": ("image",), "versus": ("images",), "post": ("text",), "comic": ("panels",)}
 
 
 def _alpha(fg, bg, a):

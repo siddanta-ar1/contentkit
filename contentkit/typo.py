@@ -112,6 +112,8 @@ def _words(text, style):
 
 
 def _line_width(words, style):
+    if not words:
+        return 0
     track = _track(style)
     space = load(style.font, style.size).getlength(" ") + track
     return sum(text_width(w.text, _font(style, w.em), track) for w in words) + space * (len(words) - 1)
@@ -153,8 +155,11 @@ def _break(words, style, width):
 
 
 def layout(text, style, width):
-    lines = _break(_words(text, style), style, width)
-    return Block(lines, style, [_line_width(l, style) for l in lines])
+    """Hard line breaks in the text are kept; a blank line becomes an empty line."""
+    lines = []
+    for para in str(text).split("\n"):
+        lines += _break(_words(para, style), style, width) if para.strip() else [[]]
+    return Block(lines, style, [_line_width(l, style) if l else 0 for l in lines])
 
 
 def fit(text, style, width, height=None, max_lines=None, min_size=10):
