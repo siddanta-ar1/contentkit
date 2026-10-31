@@ -49,7 +49,7 @@ def download(url=None, audio_only=False, out_dir=None, license="", start=None, e
     out_dir = Path(out_dir or ASSETS)
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [ytdlp, "--no-playlist", "--restrict-filenames", "--print", "after_move:filepath",
-           "--write-info-json", "-o", str(out_dir / "%(extractor)s_%(id)s.%(ext)s")]
+           "--write-info-json", "--no-write-playlist-metafiles", "-o", str(out_dir / "%(extractor)s_%(id)s.%(ext)s")]
     if audio_only:
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]   # V0 mp3: ~8x smaller than wav
     else:
