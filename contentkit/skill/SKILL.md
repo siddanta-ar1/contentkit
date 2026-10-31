@@ -32,6 +32,7 @@ Check free disk space (`df -h .`): a render needs about 1-2 GB of temporary spac
   contentkit fetch URL --audio                                 # exact video
   ```
   Tell the user the title that was downloaded so they can say if it's the wrong version.
+  Check the beat: `contentkit beats song.mp3` (BPM, first beat, hook start).
 - **Clips from social sites** (Instagram, Facebook, TikTok, X, Reddit, YouTube):
   ```bash
   contentkit fetch "<post url>" --out content/<job>/media                   # public posts
@@ -40,7 +41,6 @@ Check free disk space (`df -h .`): a render needs about 1-2 GB of temporary spac
   ```
   If it says the site wants a login, retry with `--browser` (chrome, brave, firefox, edge:
   whichever the user is logged in with).
-  Check the beat: `contentkit beats song.mp3` (BPM, first beat, hook start).
 - **Words**: names, dates, places, prices, ratings. Use their real wording.
 - **Brand**: `brand.yaml` in the project if present; otherwise an inline brand in the
   recipe (`brand: {preset: fresh, colors: {accent: "#e8572a"}, look: warm}`).

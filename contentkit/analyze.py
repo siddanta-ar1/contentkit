@@ -32,23 +32,58 @@ def _stderr(args):
                           text=True).stderr
 
 
-def cuts(src, threshold=5.0, min_gap=0.2):
-    """Perceptible cuts. Frames are compared as 48-px blurred thumbnails, so on-beat zoom
-    pulses, grain and small camera moves don't register; a jump between two near-identical
-    framings of the same action doesn't either (viewers don't read it as a new shot)."""
-    proc = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(src), "-an", "-vf",
-                           "scale=48:-2,gblur=sigma=1.5,scdet=threshold=1,metadata=print:file=-",
-                           "-f", "null", "-"], capture_output=True, text=True)
-    times, last = [], None
-    t = None
+def _scene_scores(src, width, blur=0.0):
+    vf = f"scale={width}:-2" + (f",gblur=sigma={blur}" if blur else "") + ",scdet=threshold=1,metadata=print:file=-"
+    proc = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(src), "-an", "-vf", vf, "-f", "null", "-"],
+                          capture_output=True, text=True)
+    scores, t = {}, None
     for line in proc.stdout.splitlines():
         if "pts_time:" in line:
-            t = float(line.rsplit("pts_time:", 1)[1])
+            t = round(float(line.rsplit("pts_time:", 1)[1]), 3)
+        elif line.startswith("lavfi.scd.score=") and t is not None:
+            scores[t] = float(line.split("=", 1)[1])
+    return scores
+
+
+def _periodic(times, tol=0.05, min_run=4):
+    """Times that sit on a regular grid (beat pulses): the most common spacing between
+    neighbours, if at least `min_run` gaps share it."""
+    if len(times) < min_run + 1:
+        return set()
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    best, period = 0, None
+    for g in gaps:
+        if g < 0.2:
             continue
-        if not line.startswith("lavfi.scd.score=") or t is None:
-            continue
-        score = float(line.split("=", 1)[1])
-        if score >= threshold and t > 0.1 and (last is None or t - last >= min_gap):
+        n = sum(1 for h in gaps if any(abs(h - k * g) <= tol for k in (1, 2, 3)))
+        if n > best:
+            best, period = n, g
+    if best < min_run:
+        return set()
+    # local test (a neighbour one or two periods away) so tempo-vs-frame drift doesn't matter
+    return {t for t in times
+            if any(abs(abs(t - u) - k * period) <= tol for u in times if u != t for k in (1, 2))}
+
+
+def cuts(src, min_gap=0.2):
+    """Perceptible cuts.
+
+    Two views of each frame change: a blurred 48-px thumbnail (ignores grain, zoom pulses
+    and small moves; a real cut to new content scores >= 5) and a 270-px frame (also sees
+    punch-ins and reframes, but beat pulses score just as high there). Changes that repeat
+    on a regular grid are beat pulses and only count if the blurred view also sees a cut;
+    one-off changes count when both views agree something moved. A jump between two
+    near-identical framings of the same action still doesn't count; viewers don't read it
+    as a new shot either."""
+    coarse = _scene_scores(src, 48, 1.5)
+    medium = _scene_scores(src, 270)
+    candidates = sorted(t for t, sc in medium.items() if sc >= 7 and t > 0.1)
+    pulses = _periodic(candidates)
+    times, last = [], None
+    for t in sorted(set(candidates) | {t for t, sc in coarse.items() if sc >= 5 and t > 0.1}):
+        c = coarse.get(t, 0)
+        is_cut = c >= 5 or (t not in pulses and t in candidates and c >= 2)
+        if is_cut and (last is None or t - last >= min_gap):
             times.append(t)
             last = t
     return times
