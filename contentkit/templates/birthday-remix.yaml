@@ -1,0 +1,48 @@
+# Birthday remix reel: cuts land on the beat of your song, every beat gives a zoom kick.
+# Fill the <...> values, put your photos/clips in media/, then:
+#   contentkit video birthday-remix.yaml -o out/birthday --only reel   (preview one format)
+#   contentkit proof out/birthday/<name>-reel.mp4                      (check frames)
+#   contentkit video birthday-remix.yaml -o out/birthday               (all formats)
+name: birthday-<name>
+brand: {preset: fresh, colors: {accent: "#e8572a", ink: "#1a1210", paper: "#fff4e6"}, look: warm, grain: 0.02}
+deliver: [reel, square]
+platform: reels
+
+music:
+  file: <path/to/song.mp3>        # contentkit fetch --search "<song name> remix" --audio
+  start: hook                     # jump to the most energetic part; or seconds, e.g. 42.5
+  sync: beat                      # cut on the beat ("bar" = every 4 beats)
+  beats_per_cut: 2                # scenes without `beats:` last this many beats
+  pulse: true                     # zoom kick on every beat (or a strength like 0.05)
+  volume: 1.0
+
+captions: false
+transition: cut                   # remix edits cut hard; try {type: zoomin, duration: 0.2} for one accent
+thumbnail: {layout: editorial, image: media/07-group.jpg, kicker: "<date>", title: "Happy birthday *<name>*"}
+
+# Each line is one shot. Use `video: media/x.mp4` (+ start:) for clips, `image:` for photos.
+# `beats:` makes a shot longer (hold the reveal), fewer beats = faster energy.
+scenes:
+  - image: media/01-venue.jpg
+    beats: 4
+    move: in
+    kicker: "<date> · <place>"
+    title: "Happy birthday *<name>*"
+  - {image: media/02-entry.jpg, move: right}
+  - {image: media/03-cake.jpg, move: in, focus: [0.5, 0.6]}
+  - image: media/04-candles.jpg
+    beats: 4
+    move: in
+    sfx: [{name: boom, at: 0.0, volume: 0.6}]
+  - {image: media/05-dance-1.jpg, move: left}
+  - {image: media/05-dance-2.jpg, move: right, beats: 1}
+  - {image: media/05-dance-3.jpg, move: in, beats: 1}
+  - {image: media/06-gifts.jpg, move: up}
+  - image: media/07-group.jpg
+    beats: 4
+    move: out
+    sfx: [{name: sparkle, at: 0.2, volume: 0.5}]
+  - color: "#e8572a"
+    beats: 4
+    kicker: "<name> · <age>"
+    title: "<age> and *counting*"

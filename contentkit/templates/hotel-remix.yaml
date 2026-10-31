@@ -1,0 +1,49 @@
+# Hotel review reel: your talking clip as the voice, room b-roll cut on the beat of a remix,
+# music ducks under your voice, pop captions.
+#   contentkit cut media/review.mp4 --punch 1.1 -o media/review_cut.mp4   (drop the pauses first)
+#   contentkit video hotel-remix.yaml -o out/hotel --only reel
+name: hotel-<hotel>
+brand: {preset: editorial, look: film}
+deliver: [reel, landscape]
+platform: reels
+
+voiceover:
+  file: media/review_cut.mp4      # audio is taken from your clip and cleaned (EQ, de-ess, compression)
+  delay: 0                        # keep 0 so the first scene's lip sync matches
+
+music:
+  file: <path/to/song.mp3>
+  start: hook
+  sync: beat                      # b-roll cuts snap to the beat
+  pulse: 0.02                     # gentle; a review needs to stay calm enough to listen to
+  volume: 0.28
+  duck: true
+
+captions: {style: pop}
+transition: cut
+thumbnail: {layout: editorial, image: media/04-room.jpg, kicker: "<city>", title: "<hotel>: worth *NPR <price>*?"}
+
+scenes:
+  - video: media/review_cut.mp4   # you on camera, opening line (lip-synced: same clip, start 0)
+    start: 0
+    beats: 8
+    title: "<hotel>"
+    kicker: "<city> · NPR <price>/night"
+  - {image: media/01-exterior.jpg, move: in}
+  - {image: media/02-lobby.jpg, move: right}
+  - {image: media/03-door.jpg, move: in, focus: [0.5, 0.5]}
+  - image: media/04-room.jpg
+    move: out
+    lower_third: {name: "<room type>", role: "<area>, <city>"}
+  - {image: media/05-bathroom.jpg, move: left}
+  - {image: media/06-food.jpg, move: in}
+  - {image: media/07-view.jpg, move: up}
+  - layout: stat
+    kicker: Verdict
+    stat: "<rating>/10"
+    label: would I *stay again*?
+    source: "Stayed <month year> · paid my own way"
+  - color: "#f2ede4"
+    beats: 4
+    kicker: "<hotel> · <city>"
+    title: Save this for your *next trip*

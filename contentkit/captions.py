@@ -25,7 +25,18 @@ def transcribe(audio, model="small", language=None):
     try:
         segments, _ = WhisperModel(model, device="cpu", compute_type="int8").transcribe(
             samples, word_timestamps=True, language=language, vad_filter=True)
-        return [(w.start, w.end, w.word.strip()) for seg in segments for w in seg.words if w.word.strip()]
+        words = []
+        for seg in segments:
+            for w in seg.words:
+                text = w.word.strip()
+                if not text:
+                    continue
+                # Whisper splits "12,000" into "12" + ",000": glue punctuation-led tokens back on
+                if words and (text[0] in ",.%:;!?'’)" or (w.word[:1] != " " and words[-1][2][-1:].isdigit())):
+                    words[-1] = (words[-1][0], w.end, words[-1][2] + text)
+                else:
+                    words.append((w.start, w.end, text))
+        return words
     except Exception as exc:  # model download/runtime failure: fall back to script timing
         print(f"warning: transcription failed ({exc}); using script timing")
         return None

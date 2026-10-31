@@ -22,6 +22,8 @@ upload of client material.
 - [Posters and carousels](#posters-and-carousels)
 - [Print](#print)
 - [Video](#video)
+- [Music-driven edits](#music-driven-edits)
+- [Use it from any project (agent skill)](#use-it-from-any-project-agent-skill)
 - [Audio](#audio)
 - [Colour looks](#colour-looks)
 - [Safe zones](#safe-zones)
@@ -63,6 +65,7 @@ python3 -m venv .venv
 | `pip install -e .` | Posters, print, video, SFX, espeak-ng voice, script-timed captions |
 | `pip install -e ".[tts]"` | + Piper neural voices (offline) |
 | `pip install -e ".[captions]"` | + faster-whisper word-accurate captions from any recording |
+| `pip install -e ".[fetch]"` | + current yt-dlp for `contentkit fetch` (distro packages fall behind YouTube) |
 | `pip install -e ".[all]"` | Everything |
 
 In another project: `pip install "contentkit[all] @ git+https://github.com/siddanta-ar1/contentkit.git"`.
@@ -287,6 +290,63 @@ Masters: H.264 High, yuv420p, BT.709 primaries/transfer/matrix (tagged, and conv
 correctly from RGB stills, so colours don't shift after platform re-encodes), CRF 18
 capped at 16 Mb/s, AAC 256 kb/s 48 kHz, `+faststart`.
 
+## Music-driven edits
+
+Cut on the beat of any song, starting at its best part, with a zoom kick on every beat.
+
+```bash
+contentkit fetch --search "resham firiri remix" --audio     # top YouTube result -> mp3
+contentkit fetch --list firiri                               # find it again later by title
+contentkit beats ~/.contentkit/downloads/youtube_XXXX.mp3    # BPM, first beat, hook
+contentkit template new birthday-remix content/aasha-bday    # recipe + media/ folder
+```
+
+```yaml
+music:
+  file: ~/.contentkit/downloads/youtube_XXXX.mp3
+  start: hook          # the most energetic 20 s, snapped to a downbeat (or seconds: 42.5)
+  sync: beat           # every cut lands on a beat ("bar" = every 4 beats)
+  beats_per_cut: 2     # default length of scenes without `beats:`
+  pulse: true          # zoom kick on each beat (or a strength, e.g. 0.02)
+  bpm: 128             # optional: skip tempo detection
+scenes:
+  - {image: media/cake.jpg, beats: 4}      # hold the big moments
+  - {image: media/dance.jpg, beats: 1}     # fast moments
+```
+
+How it works: spectral-flux onsets, tempo by autocorrelation, then tempo and phase
+fitted together with the kick band weighted up so off-beat hi-hats don't win. On test
+tracks from 90 to 140 BPM, tempo is within 0.1 BPM and downbeats within ±9 ms. Cut times
+are placed on the exact beat grid and only then rounded to frames, so they never drift.
+With a voiceover, scenes are sized by the voice and then snapped to whole beats; music
+ducks under the voice. On synced edits the transition whoosh is off by default (the song
+is the transition).
+
+Templates (`contentkit template list`):
+
+| Template | What it makes |
+|---|---|
+| `birthday-remix` | Song-only reel: title over the venue, cake and candle beats held, quick dance cuts, end card |
+| `hotel-remix` | Your talking clip as the voice (lip-synced opener), b-roll cut on the beat, rating stat, end card |
+
+**Private mode** (`contentkit private on`): for content that stays on your machine.
+Downloads are labelled `private use (local only)` instead of `UNKNOWN`. Every download is
+indexed in `~/.contentkit/downloads/index.json` with title, uploader, URL and duration.
+
+## Use it from any project (agent skill)
+
+```bash
+contentkit skill install global              # every project: ~/.claude/skills/contentkit
+contentkit skill install ~/work/hotel-site   # one project: <project>/.claude/skills/contentkit
+```
+
+Then, in that project, just ask Claude Code: *"make a birthday reel for Aasha with a
+Resham Firiri remix, photos are in ~/Pictures/bday"* or *"hotel review reel for Yak & Yeti
+from these clips"*. The skill tells the agent to: find contentkit, download and analyse
+the song, start from a template, fill the recipe with your files and words, render a
+preview, **look at the proof sheet**, fix what's wrong, then render every format. Jobs live
+in `content/<job>/` inside the project. `contentkit skill show` prints the skill.
+
 ## Audio
 
 ```bash
@@ -369,7 +429,11 @@ contentkit proof out/carousel --cols 5 --title "Brew guide"               # boar
 | `brand` | `init` a brand kit from a preset; `presets` |
 | `sfx` | Sound library: `init list play add` |
 | `tts` | Text to speech |
-| `fetch` | yt-dlp download with a `.source.json` record |
+| `fetch` | Download by URL or `--search "song"`; `--list` the library; `.source.json` record |
+| `beats` | Song tempo, first beat and hook |
+| `template` | `list`, `new NAME DIR`: start a job (birthday-remix, hotel-remix) |
+| `skill` | `install [global|PROJECT]`, `show`: the Claude Code skill |
+| `private` | `on|off|status`: private local-only mode |
 | `formats` | Output sizes |
 
 ## Python API
@@ -425,13 +489,17 @@ contentkit/
   printing.py   bleed, crop marks, slug, CMYK via ICC, lossless PDF with page boxes, proofs
   video.py      scenes, moves, overlays, transitions, mix, captions, mastering, deliverables
   audio.py      voice chain, two-pass loudness, silence-cut jump edits
+  beats.py      tempo, beat phase and hook detection
+  config.py     ~/.contentkit/config.yaml (private mode)
+  templates/    job templates (birthday-remix, hotel-remix)
+  skill/        the Claude Code skill installed by `contentkit skill install`
   captions.py   whisper timing, script alignment, ASS caption styles, SRT export
   proof.py      video contact sheets, image boards
   formats.py    social sizes, print sizes, safe zones, loudness and encode targets
   fonts.py      bundled font registry + fontconfig fallback
   sfx.py        synthesized SFX pack + licensed library
   voice.py      Piper / espeak-ng
-  fetch.py      yt-dlp with source records
+  fetch.py      yt-dlp by URL or search, source records, download index
   post.py       classic v0.1 single-card engine (kept for old recipes)
   cli.py        command line
   assets/fonts/ Inter, Inter Display, Instrument Serif, Anton, IBM Plex Mono + OFL licenses
@@ -457,6 +525,7 @@ docs/                        README images
 | piper-tts 1.8 | GPL-3.0; **each voice model has its own license**, check its MODEL_CARD before commercial use |
 | espeak-ng | GPL-3.0 |
 | yt-dlp | Unlicense |
+| Downloaded songs and clips | Owned by their rights holders; private mode labels them for local use |
 | ICC profiles (FOGRA, GRACoL, SWOP) | Shipped by colord on your system, not bundled here |
 | Built-in SFX and demo music | Generated locally |
 
@@ -496,6 +565,13 @@ conservative value is used, and every value can be overridden.
 | Captions missing | ffmpeg needs libass (distro builds have it); captions need a voiceover |
 
 ## Changelog
+
+**0.3.0**: music-driven edits and agent skill.
+Beat analysis (tempo, kick-weighted phase, hook); beat-synced cuts with `beats:` per scene;
+on-beat zoom pulse; songs start at the hook; `fetch --search` / `--list` with a download
+index, MP3 audio, newest yt-dlp; private mode; birthday-remix and hotel-remix templates;
+Claude Code skill installable globally or per project; Whisper number tokens joined
+("12,000"); delivery file names slugified.
 
 **0.2.0**: design and production release.
 Brand kits; typesetting engine; 7 grid layouts with carousels; bundled OFL fonts; print

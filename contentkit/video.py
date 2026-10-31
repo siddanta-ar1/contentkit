@@ -18,6 +18,7 @@ Pipeline
 See examples/video/*.yaml for every option.
 """
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -265,9 +266,34 @@ def _transition(recipe, scene):
     return t
 
 
-def plan(recipe, voice_end, fps=30):
-    """Fill open durations so the edit covers the voiceover, and compute scene start times."""
+def music_grid(recipe, log=print):
+    """Analyse the music once (shared by every format): where to start it and its beat grid.
+    music.start: seconds, or "hook" / "auto" for the most energetic part of the song."""
+    music = recipe.get("music")
+    if not music or isinstance(music, str):
+        return None
+    start = music.get("start", 0)
+    if not (music.get("sync") or music.get("pulse") or start in ("auto", "hook")):
+        return None
+    from .beats import analyze
+    seconds = float(recipe.get("duration") or 20)
+    info = analyze(music["file"], 0, 240, music.get("bpm"), hook_window=min(max(seconds, 10), 30))
+    start = info["hook"] if start in ("auto", "hook") else float(start)
+    offset = (info["first_beat"] - start) % info["beat"]   # first beat inside the edit
+    log(f"music: {info['bpm']:.1f} BPM, starting at {start:.2f}s"
+        + (" (hook)" if music.get("start") in ("auto", "hook") else ""))
+    return {"bpm": info["bpm"], "beat": info["beat"], "offset": offset, "start": start}
+
+
+def plan(recipe, voice_end, fps=30, grid=None):
+    """Fill open durations so the edit covers the voiceover (or the beat grid), and compute
+    scene start times."""
     scenes = [dict(s) for s in recipe["scenes"]]
+    for s in scenes:  # `beats: 4` sizes a scene musically (needs music with a beat grid)
+        if s.get("beats") and not s.get("duration"):
+            if not grid:
+                raise SystemExit("`beats:` on a scene needs music with sync/pulse/start: hook")
+            s["duration"] = float(s["beats"]) * grid["beat"]
     trans = [None] + [_transition(recipe, s) for s in scenes[1:]]
     # With any xfade in the edit the whole join goes through xfade, where a hard cut is a
     # one-frame fade: it overlaps by one frame, so the timeline must count it.
@@ -278,18 +304,38 @@ def plan(recipe, voice_end, fps=30):
     overlap = sum(t["duration"] for t in trans[1:])
     fixed = sum(float(s["duration"]) for s in scenes if s.get("duration"))
     open_scenes = [s for s in scenes if not s.get("duration")]
+    music = recipe.get("music") if isinstance(recipe.get("music"), dict) else {}
+    sync = grid and music.get("sync")
     if open_scenes:
-        if not voice_end:
-            raise SystemExit("Scenes without `duration` need a voiceover to size them.")
-        share = max((voice_end + 0.6 - fixed + overlap) / len(open_scenes), 1.2)
+        if voice_end:
+            share = max((voice_end + 0.6 - fixed + overlap) / len(open_scenes), 1.2)
+        elif sync:
+            share = grid["beat"] * float(music.get("beats_per_cut", 4 if sync == "bar" else 2))
+        else:
+            share = float(recipe.get("scene_duration", 2.5))
         for s in open_scenes:
             s["duration"] = round(share, 3)
-    # Snap everything to whole frames: rendered clips are frame-exact, the plan must be too.
     snap = lambda v: round(float(v) * fps) / fps
-    for s in scenes:
-        s["duration"] = snap(s["duration"])
     for t in trans[1:]:
         t["duration"] = max(snap(t["duration"]), 1 / fps) if t["duration"] else 0.0
+    if sync:
+        # Cut on the beat: each scene lasts a whole number of beats (bars with sync: bar).
+        # Cut times are placed on the exact grid first and only then rounded to frames, so
+        # rounding never accumulates into drift; overlapping transitions are added back so
+        # every incoming scene still starts on its beat.
+        unit = grid["beat"] * (4 if sync == "bar" else 1)
+        counts = [max(1, round(float(s["duration"]) / unit)) for s in scenes]
+        cut = [grid["offset"]]
+        for c in counts:
+            cut.append(cut[-1] + c * unit)
+        cut[0] = 0.0                     # the edit opens on frame 0
+        frames = [round(c * fps) for c in cut]
+        for i, s in enumerate(scenes):
+            over = trans[i + 1]["duration"] if i + 1 < len(scenes) else 0.0
+            s["duration"] = (frames[i + 1] - frames[i]) / fps + over
+    # Snap everything to whole frames: rendered clips are frame-exact, the plan must be too.
+    for s in scenes:
+        s["duration"] = snap(s["duration"])
     starts, t = [], 0.0
     for i, s in enumerate(scenes):
         if i:
@@ -358,7 +404,7 @@ def prepare_voice(recipe, work, log=print):
     return voice, length, delay, words
 
 
-def _mix(recipe, joined, voice, delay, cues, total, work):
+def _mix(recipe, joined, voice, delay, cues, total, work, grid=None):
     inputs, graph, mix, n = ["-i", joined], [], ["[0:a]"], 1
     rate = ENCODE["audio_rate"]
     fmt = f"aformat=sample_rates={rate}:channel_layouts=stereo"
@@ -373,9 +419,12 @@ def _mix(recipe, joined, voice, delay, cues, total, work):
     music = recipe.get("music")
     if music:
         music = {"file": music} if isinstance(music, str) else music
-        inputs += ["-stream_loop", -1, "-i", Path(music["file"]).resolve()]
+        start = grid["start"] if grid else float(music.get("start", 0) or 0)
+        inputs += ["-stream_loop", -1, "-ss", f"{start:.3f}", "-i", Path(music["file"]).resolve()]
+        # synced edits start on a downbeat: a long fade-in would smear the first hit
+        fade_in = music.get("fade_in", 0.02 if grid else 0.6)
         chain = (f"[{n}:a]{fmt},atrim=0:{total},volume={music.get('volume', 0.3)},"
-                 f"afade=t=in:d={music.get('fade_in', 0.6)},afade=t=out:st={max(total - 1.8, 0)}:d=1.8")
+                 f"afade=t=in:d={fade_in},afade=t=out:st={max(total - 1.8, 0)}:d=1.8")
         if duck_key and music.get("duck", True):
             graph.append(f"{chain}[mraw];[mraw]{duck_key}sidechaincompress=threshold=0.02:ratio=10:attack=15:"
                          f"release=350[mus]")
@@ -399,9 +448,10 @@ def _mix(recipe, joined, voice, delay, cues, total, work):
     return raw
 
 
-def _cues(recipe, scenes, trans, starts):
+def _cues(recipe, scenes, trans, starts, grid=None):
     cues = []
-    tsfx = recipe.get("transition_sfx", "whoosh")
+    # on a beat-synced edit the song is the transition; a whoosh only fights it
+    tsfx = recipe.get("transition_sfx", None if grid else "whoosh")
     for i, scene in enumerate(scenes):
         if i and tsfx:
             lead = 0.3 if trans[i]["type"] == "cut" else 0.2
@@ -420,14 +470,14 @@ def _caption_cfg(recipe, brand):
     return {**(brand.captions or {}), **cap}
 
 
-def render_format(recipe, fmt_name, out, work, brand, voice_pack, log=print):
+def render_format(recipe, fmt_name, out, work, brand, voice_pack, log=print, grid=None):
     fmt = get_format(fmt_name)
     w, h = fmt["w"], fmt["h"]
     voice, voice_len, delay, words = voice_pack
     platform = recipe.get("platform", "universal")
     look = recipe.get("look", brand.look)
     lut = fx.lut_for(look, work)
-    scenes, trans, starts, total = plan(recipe, voice_len + delay if voice else 0, fmt["fps"])
+    scenes, trans, starts, total = plan(recipe, voice_len + delay if voice else 0, fmt["fps"], grid)
     if voice and voice_len + delay > total + 0.05:
         log(f"warning: voiceover ({voice_len:.1f}s) runs past the edit ({total:.1f}s) and will be cut")
 
@@ -449,10 +499,16 @@ def render_format(recipe, fmt_name, out, work, brand, voice_pack, log=print):
     if abs(got - total) > 2 / fmt["fps"]:
         raise RuntimeError(f"joined timeline is {got:.2f}s, expected {total:.2f}s (transition longer than a scene?)")
 
-    raw = _mix(recipe, joined, voice, delay, _cues(recipe, scenes, trans, starts), total, work)
+    raw = _mix(recipe, joined, voice, delay, _cues(recipe, scenes, trans, starts, grid), total, work, grid)
     loud = audio.master(raw, work / "mix.wav")
 
     vf = []
+    pulse = (recipe.get("music") or {}).get("pulse") if isinstance(recipe.get("music"), dict) else None
+    if pulse and grid:
+        # zoom kick on every beat, decaying over ~100 ms; captions are added after, so they stay still
+        amt = 0.035 if pulse is True else float(pulse)
+        z = f"(1+{amt}*exp(-mod(t-{grid['offset']:.4f}+{grid['beat']:.5f}*8,{grid['beat']:.5f})*14))"
+        vf.append(f"scale=w='trunc(iw*{z}/2)*2':h='trunc(ih*{z}/2)*2':eval=frame:flags=bicubic,crop={w}:{h}")
     if show_caps:
         write_ass(words, work / "captions.ass", w, h, font=cap.get("font"), color=cap.get("color", "#ffffff"),
                   accent=cap.get("accent", brand.accent), words_per_line=cap.get("words"),
@@ -513,11 +569,12 @@ def render_video(recipe, out, workdir=None, log=print):
     base_work = Path(workdir or tempfile.mkdtemp(prefix="contentkit-")).resolve()
     base_work.mkdir(parents=True, exist_ok=True)
     voice_pack = prepare_voice(recipe, base_work, log)
+    grid = music_grid(recipe, log)
     out = Path(out)
     formats = recipe.get("deliver")
 
     if not formats:
-        render_format(recipe, recipe.get("format", "reel"), out, base_work, brand, voice_pack, log)
+        render_format(recipe, recipe.get("format", "reel"), out, base_work, brand, voice_pack, log, grid)
         if recipe.get("srt") and voice_pack[3]:
             write_srt(voice_pack[3], out.with_suffix(".srt"))
         return out.resolve()
@@ -525,12 +582,13 @@ def render_video(recipe, out, workdir=None, log=print):
     out_dir = out if not out.suffix else out.parent / out.stem
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = recipe.get("name") or (out.stem if out.suffix else out.name)
+    stem = re.sub(r"[^\w.-]+", "-", stem).strip("-").lower()  # "hotel-Yak & Yeti" -> "hotel-yak-yeti"
     files = []
     for fmt_name in formats:
         work = base_work / fmt_name
         work.mkdir(exist_ok=True)
         files.append(render_format(recipe, fmt_name, out_dir / f"{stem}-{fmt_name}.mp4", work, brand,
-                                   voice_pack, log))
+                                   voice_pack, log, grid))
     extras = {}
     if voice_pack[3]:
         extras["captions_srt"] = write_srt(voice_pack[3], out_dir / f"{stem}.srt").name
@@ -538,6 +596,7 @@ def render_video(recipe, out, workdir=None, log=print):
     if images:
         extras["images"] = images
     manifest = {"name": stem, "brand": brand.name, "look": recipe.get("look", brand.look),
+                "music": {k: round(v, 3) for k, v in grid.items()} if grid else None,
                 "videos": files, **extras,
                 "spec": {"video": "H.264 High, yuv420p, BT.709, CRF 18 capped at 16 Mb/s (VBV 16M), faststart",
                          "audio": "AAC 256 kb/s, 48 kHz, two-pass loudnorm to -14 LUFS / -1 dBTP"}}

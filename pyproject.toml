@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "contentkit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Open-source content studio: grid-based posters, print-ready PDFs, branded video, captions, sound and loudness"
 requires-python = ">=3.10"
 dependencies = ["Pillow>=10", "PyYAML>=6", "numpy>=1.24"]
@@ -12,7 +12,8 @@ dependencies = ["Pillow>=10", "PyYAML>=6", "numpy>=1.24"]
 [project.optional-dependencies]
 captions = ["faster-whisper>=1.0"]
 tts = ["piper-tts>=1.2"]
-all = ["faster-whisper>=1.0", "piper-tts>=1.2"]
+fetch = ["yt-dlp[default]"]
+all = ["faster-whisper>=1.0", "piper-tts>=1.2", "yt-dlp[default]"]
 
 [project.scripts]
 contentkit = "contentkit.cli:main"
@@ -21,4 +22,4 @@ contentkit = "contentkit.cli:main"
 packages = ["contentkit"]
 
 [tool.setuptools.package-data]
-contentkit = ["assets/fonts/*"]
+contentkit = ["assets/fonts/*", "templates/*.yaml", "skill/*.md"]

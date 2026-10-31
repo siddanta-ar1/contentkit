@@ -1,9 +1,10 @@
 """contentkit command line. `contentkit <command> -h` for options.
 
 Design      poster, post, print, looks, layouts, brand, safezone
-Video       video, cut, captions, proof
-Audio       clean, master, tts, sfx
+Video       video, template, cut, captions, proof
+Audio       beats, clean, master, tts, sfx
 Assets      fetch, formats
+Setup       skill, private
 """
 import argparse
 import json
@@ -232,12 +233,66 @@ def cmd_captions(a):
 
 
 def cmd_fetch(a):
-    from .fetch import download
+    from .fetch import download, library
+    if a.list is not None:
+        for e in library(a.list or None):
+            print(f"{e['file']}\n    {e.get('title')}  ·  {e.get('uploader')}  ·  {e.get('duration_s')}s")
+        return
     start = end = None
     if a.section:
         start, end = a.section.split("-")
-    path, meta = download(a.url, a.audio, a.out, a.license or "", start, end)
-    print(f"{path}\n{json.dumps(meta, indent=2)}")
+    path, meta = download(a.url, a.audio, a.out, a.license or "", start, end, search=a.search)
+    print(f"{path}\n{json.dumps(meta, indent=2, ensure_ascii=False)}")
+
+
+def cmd_beats(a):
+    from .beats import analyze
+    info = analyze(a.song, 0, 240, a.bpm, hook_window=a.window)
+    bar = 4 * info["beat"]
+    print(f"bpm         {info['bpm']:.1f}\nbeat        {info['beat']:.3f}s   bar {bar:.3f}s\n"
+          f"first beat  {info['first_beat']:.3f}s\nhook        {info['hook']:.2f}s  "
+          f"(most energetic {a.window:g}s, on a downbeat; use music.start: hook)")
+
+
+def cmd_private(a):
+    from . import config
+    if a.state != "status":
+        config.set_value("private", a.state == "on")
+    on = config.private()
+    print(f"private mode {'ON' if on else 'off'}: downloads are labelled "
+          + ("'private use (local only)'" if on else "'UNKNOWN' until you record a license"))
+
+
+def cmd_skill(a):
+    src = Path(__file__).parent / "skill" / "SKILL.md"
+    if a.action == "show":
+        print(src.read_text())
+        return
+    base = Path.home() / ".claude" if a.target == "global" else Path(a.target).expanduser() / ".claude"
+    dest = base / "skills" / "contentkit" / "SKILL.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+    print(f"installed {dest}\nAsk Claude Code for a video, reel or poster there and it will use contentkit.")
+
+
+def cmd_template(a):
+    tdir = Path(__file__).parent / "templates"
+    if a.action == "list":
+        for t in sorted(tdir.glob("*.yaml")):
+            first = t.read_text().splitlines()[0].lstrip("# ")
+            print(f"{t.stem:<16} {first}")
+        return
+    src = tdir / f"{a.name}.yaml"
+    if not src.exists():
+        raise SystemExit(f"No template '{a.name}'. contentkit template list")
+    dest = Path(a.dest or a.name)
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "media").mkdir(exist_ok=True)
+    recipe = dest / "recipe.yaml"
+    if recipe.exists():
+        raise SystemExit(f"{recipe} exists; not overwriting")
+    shutil.copy2(src, recipe)
+    print(f"{recipe}\n{dest / 'media'}/   <- put photos and clips here, then fill the <...> values")
 
 
 def main(argv=None):
@@ -346,12 +401,31 @@ def main(argv=None):
     s.add_argument("--words", type=int)
     s.add_argument("--srt", action="store_true", help="also write an .srt next to the input")
 
-    s = cmd("fetch", cmd_fetch, "download a clip or sound with yt-dlp (+ source record)")
-    s.add_argument("url")
-    s.add_argument("--audio", action="store_true")
+    s = cmd("fetch", cmd_fetch, "download a song or clip by URL or search (+ source record and index)")
+    s.add_argument("url", nargs="?")
+    s.add_argument("--search", metavar="QUERY", help="take the top YouTube result for QUERY")
+    s.add_argument("--list", nargs="?", const="", metavar="FILTER", help="list downloads (optionally filtered)")
+    s.add_argument("--audio", action="store_true", help="audio only, mp3")
     s.add_argument("--section", help="seconds, e.g. 12-20")
     s.add_argument("--license")
     s.add_argument("--out")
+
+    s = cmd("beats", cmd_beats, "tempo, first beat and hook (most energetic part) of a song")
+    s.add_argument("song")
+    s.add_argument("--bpm", type=float, help="skip tempo detection")
+    s.add_argument("--window", type=float, default=20, help="hook length in seconds")
+
+    s = cmd("private", cmd_private, "private mode: content stays on this machine")
+    s.add_argument("state", choices=["on", "off", "status"])
+
+    s = cmd("skill", cmd_skill, "install the Claude Code skill into a project or globally")
+    s.add_argument("action", choices=["install", "show"])
+    s.add_argument("target", nargs="?", default="global", help="project folder, or 'global' (~/.claude)")
+
+    s = cmd("template", cmd_template, "start a job from a template (birthday-remix, hotel-remix)")
+    s.add_argument("action", choices=["list", "new"])
+    s.add_argument("name", nargs="?")
+    s.add_argument("dest", nargs="?")
 
     cmd("formats", lambda a: [print(f"{k:<10} {v['w']}x{v['h']}") for k, v in FORMATS.items()],
         "list output sizes")
