@@ -170,6 +170,43 @@ def analyze(src, kind="meme"):
         note("fix", "black frames", f"Black frames {a:.1f}-{b:.1f}s.")
     for a, b in report["frozen"]:
         note("info", "freeze", f"Picture static {a:.1f}-{(b or dur):.1f}s. Fine for a freeze-frame gag; otherwise add motion.")
+    # --- viral readiness: what decides watch-vs-skip and replays (proxies, not a predictor)
+    from . import vision
+    hook_frame = vision.frame_at(src, min(0.3, dur / 3))
+    tx = vision.text(hook_frame)
+    fc = vision.faces(hook_frame)
+    move = vision.motion(vision.frame_at(src, 0.05), vision.frame_at(src, min(1.0, dur / 2)))
+    loop = vision.similarity(vision.frame_at(src, 0.05), vision.frame_at(src, max(dur - 0.08, 0)))
+    report["viral"] = {"hook_text": (tx or {}).get("text") or None if tx is not None else None,
+                       "hook_face": vision.framing(fc) if fc is not None else None,
+                       "first_second_motion": round(move, 1) if move is not None else None,
+                       "loop_similarity": round(loop, 2) if loop is not None else None}
+    if tx is not None and not tx["text"] and kind in ("meme", "commentary"):
+        note("improve", "hook text", "No readable text on the first frame. Most viewers watch muted at "
+                                     "first: put the setup line on frame 1 (header: or texts:).")
+    if fc is not None and not fc and kind in ("commentary", "brand"):
+        note("info", "hook face", "No face on the first frame; a face looking at camera stops the scroll best.")
+    if move is not None and move < 4:
+        note("improve", "hook motion", "The first second barely moves. Open on action, a zoom or a cut.")
+    if loop is not None and loop > 0.85:
+        note("info", "loop", "Last frame matches the first: the video loops cleanly (replays count as watch time).")
+    elif loop is not None and kind in ("meme", "remix"):
+        note("info", "loop", "Doesn't loop. Ending on a frame like the opening makes replays feel seamless.")
+
+    # --- footage QC: soft or badly exposed shots
+    for k, (a, b) in enumerate(zip(bounds, bounds[1:])):
+        if b - a < 0.3 or k >= 30:
+            continue
+        fr = vision.frame_at(src, (a + b) / 2)
+        sh, ex = vision.sharpness(fr), vision.exposure(fr)
+        if sh is not None and sh < 40:
+            note("improve", "focus", f"Shot at {a:.1f}s looks soft (sharpness {sh:.0f}); reshoot, or keep it short.")
+        if ex and ex["clipped"] > 0.25:
+            note("improve", "exposure", f"Shot at {a:.1f}s has {ex['clipped']:.0%} blown highlights.")
+        if ex and ex["crushed"] > 0.45:
+            note("improve", "exposure", f"Shot at {a:.1f}s is {ex['crushed']:.0%} crushed black; lift it "
+                                        "(look: matte) or reshoot with more light.")
+
     if h < w and kind in ("meme", "remix"):
         note("improve", "format", f"{w}x{h} is landscape; Reels/TikTok/Shorts want 9:16 (format: reel).")
     if min(w, h) < 1080:
@@ -186,6 +223,10 @@ def render_text(r):
              f"longest {r['longest_shot_s']}s"]
     if r["lufs"] is not None:
         lines.append(f"  loudness     {r['lufs']:.1f} LUFS   true peak {r['true_peak']:.1f} dBTP")
+    v = r.get("viral") or {}
+    if v:
+        lines.append(f"  hook frame   text: {v['hook_text'] or '-'}   face: {v['hook_face'] or '-'}   "
+                     f"motion 0-1s: {v['first_second_motion']}   loop: {v['loop_similarity']}")
     lines.append("")
     if not r["notes"]:
         lines.append("  No problems found.")
