@@ -5,12 +5,9 @@ entry in ~/.contentkit/downloads/index.json, so an agent can find "that Resham F
 remix" later by title even when the filename is just the video id.
 """
 import json
-import shutil
-import subprocess
-import sys
 from pathlib import Path
 
-from . import config
+from . import config, ytdlp
 
 ASSETS = Path.home() / ".contentkit" / "downloads"
 INDEX = ASSETS / "index.json"
@@ -43,41 +40,38 @@ def download(url=None, audio_only=False, out_dir=None, license="", start=None, e
     Instagram, Facebook and some TikTok/X posts only download for a logged-in user:
     browser="chrome" (or brave, firefox, edge, chromium) reuses that browser's login on this
     machine; cookies="cookies.txt" uses an exported cookie file instead."""
-    # prefer the yt-dlp installed with this Python: distro packages lag behind YouTube changes
-    local = Path(sys.executable).with_name("yt-dlp")
-    ytdlp = str(local) if local.exists() else shutil.which("yt-dlp")
-    if not ytdlp:
-        raise SystemExit("yt-dlp not found: pip install -U yt-dlp")
     if not (url or search):
         raise SystemExit("Give a URL or --search \"song name\"")
     target = url or f"ytsearch1:{search}"
     out_dir = Path(out_dir or ASSETS)
     out_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [ytdlp, "--no-playlist", "--restrict-filenames", "--print", "after_move:filepath",
+    cmd = ["--no-playlist", "--restrict-filenames", "--print", "after_move:filepath",
            "--write-info-json", "--no-write-playlist-metafiles", "-o", str(out_dir / "%(extractor)s_%(id)s.%(ext)s")]
     if audio_only:
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]   # V0 mp3: ~8x smaller than wav
     else:
-        cmd += ["-f", "bv*[height<=1920]+ba/b", "--merge-output-format", "mp4"]
-    # YouTube now needs a JavaScript runtime for its player challenge; yt-dlp only looks for
-    # deno by default, so hand it node when that's what's installed.
-    if not shutil.which("deno") and shutil.which("node"):
-        cmd += ["--js-runtimes", f"node:{shutil.which('node')}"]
+        # cap both sides (a 3840x1608 film-ratio video passes a height-only cap) and prefer
+        # plain https formats: cut sections of m3u8 4K streams can come back without video
+        cmd += ["-f", "bv*[height<=1920][width<=1920][protocol^=http]+ba/bv*[height<=1920][width<=1920]+ba"
+                "/b[height<=1920][width<=1920]/bv*+ba/b", "--merge-output-format", "mp4"]
     if browser:
         cmd += ["--cookies-from-browser", browser]
     elif cookies:
         cmd += ["--cookies", str(cookies)]
     if start is not None or end is not None:
         cmd += ["--download-sections", f"*{start or 0}-{end or 'inf'}", "--force-keyframes-at-cuts"]
-    proc = subprocess.run([*cmd, target], capture_output=True, text=True)
+    proc = ytdlp.run(cmd, target)   # self-healing: updates yt-dlp / switches client when YouTube changes
     if proc.returncode != 0 or not proc.stdout.strip():
-        lines = proc.stderr.strip().splitlines()
-        errors = [l for l in lines if l.startswith("ERROR")]
-        msg = (errors or lines or ["yt-dlp found nothing"])[-1]
-        if not browser and any(k in msg.lower() for k in ("login", "cookies", "private", "rate-limit", "sign in")):
+        msg = proc.error
+        if not browser and "--browser" not in msg and any(k in msg.lower() for k in ("login", "cookies", "private", "rate-limit", "sign in")):
             msg += "\n  -> this site wants a login: retry with --browser chrome (or brave/firefox)"
         raise SystemExit(msg)
     path = Path(proc.stdout.strip().splitlines()[-1])
+    if not audio_only:
+        from . import ff
+        if not any(s["codec_type"] == "video" for s in ff.probe(path)["streams"]):
+            path.unlink(missing_ok=True)
+            raise SystemExit(f"{target}: download has no video stream (try again, or without --section)")
 
     info_file = path.with_suffix(".info.json")
     info = json.loads(info_file.read_text()) if info_file.exists() else {}

@@ -247,6 +247,12 @@ def cmd_captions(a):
 
 def cmd_fetch(a):
     from .fetch import download, library
+    if a.doctor or a.update:
+        from . import ytdlp
+        if a.update and not ytdlp.update(nightly=True):
+            raise SystemExit("update failed")
+        print(ytdlp.status())
+        return
     if a.list is not None:
         for e in library(a.list or None):
             print(f"{e['file']}\n    {e.get('title')}  ·  {e.get('uploader')}  ·  {e.get('duration_s')}s")
@@ -467,6 +473,8 @@ def main(argv=None):
     s.add_argument("--browser", help="use this browser's login (chrome, brave, firefox, edge) for IG/FB")
     s.add_argument("--cookies", help="cookies.txt exported from a logged-in browser")
     s.add_argument("--section", help="seconds, e.g. 12-20")
+    s.add_argument("--doctor", action="store_true", help="show which yt-dlp is used and how fresh it is")
+    s.add_argument("--update", action="store_true", help="update the private yt-dlp to the nightly build now")
     s.add_argument("--license")
     s.add_argument("--out")
 

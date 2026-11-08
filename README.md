@@ -72,7 +72,7 @@ python3 -m venv .venv
 | `pip install -e .` | Posters, print, video, SFX, espeak-ng voice, script-timed captions |
 | `pip install -e ".[tts]"` | + Piper neural voices (offline) |
 | `pip install -e ".[captions]"` | + faster-whisper word-accurate captions from any recording |
-| `pip install -e ".[fetch]"` | + current yt-dlp for `contentkit fetch` (distro packages fall behind YouTube) |
+| `pip install -e ".[fetch]"` | optional: `fetch` sets up and updates its own yt-dlp in `~/.contentkit/tools` (needs `python3-venv`) |
 | `pip install -e ".[all]"` | Everything |
 
 In another project: `pip install "contentkit[all] @ git+https://github.com/siddanta-ar1/contentkit.git"`.
@@ -393,6 +393,12 @@ machine; `--cookies cookies.txt` uses an exported cookie file instead. On Linux,
 and Brave encrypt their cookies with the system keyring: install `pip install
 secretstorage` (included in `.[fetch]` / `.[all]`) for `--browser` to read them. For
 YouTube, `fetch` passes your Node.js to yt-dlp as the JavaScript runtime it now needs.
+
+**When YouTube changes and downloads break.** `fetch` keeps a private yt-dlp in
+`~/.contentkit/tools/yt-dlp` and refreshes it every few days. If a download fails the way an
+outdated yt-dlp fails, it updates to the nightly build and retries, then tries other YouTube
+player clients, and only then shows the error. `contentkit fetch --doctor` shows the version
+in use; `contentkit fetch --update` updates now. Set `CONTENTKIT_YTDLP=/path/to/yt-dlp` to pin a binary.
 
 ## Critique an edit
 
